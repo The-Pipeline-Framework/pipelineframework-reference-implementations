@@ -1,0 +1,123 @@
+name: Reusable — Search Pipeline E2E
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-e2e-search-pipeline
+  cancel-in-progress: true
+
+env:
+  MAVEN_OPTS: -Xmx2g -Xms512m
+  MAVEN_ARGS_BUILD: -B -T 1C -V -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.parallel=none -Dfailsafe.parallel=none -Dmaven.repo.local=${{ github.workspace }}/.m2/repository
+  QUARKUS_JIB_BASE_JVM_IMAGE: "registry.access.redhat.com/ubi9/openjdk-21-runtime:1.24@sha256:41cfee8b4373d0be1c6724ab80a9942e1e4d10bba62c5876455a8028a7a953a2"
+
+jobs:
+  search-pipeline-e2e:
+    name: Search Pipeline E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Configure Maven
+        run: echo "MAVEN_ARGS=${{ env.MAVEN_ARGS_BUILD }} --no-transfer-progress" >> $GITHUB_ENV
+
+      - name: Setup Testcontainers Docker environment
+        uses: ./.github/actions/setup-testcontainers
+        with:
+          images: |
+            testcontainers/ryuk:0.13.0
+            alpine:3.17
+
+      - name: Restore Search topology images
+        id: search-topology-images
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/search-topology-images.tar
+          key: tpf-search-topology-images-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pom.xml', 'search/**') }}
+
+      - name: Load Search topology images
+        if: ${{ steps.search-topology-images.outputs.cache-hit == 'true' }}
+        run: |
+          docker load --input "${{ runner.temp }}/search-topology-images.tar" >/dev/null
+          echo "Search topology image cache hit."
+
+      - name: Build Search topology images
+        if: ${{ steps.search-topology-images.outputs.cache-hit != 'true' }}
+        run: |
+          local_maven_args="${MAVEN_ARGS/-T 1C/-T 1}"
+          read -r -a maven_args <<< "$local_maven_args"
+          ./mvnw "${maven_args[@]}" -f search/pom.xml \
+            -DskipTests \
+            -DskipNative=true \
+            -Dquarkus.container-image.build=true \
+            clean install
+
+      - name: Archive Search topology images
+        if: ${{ steps.search-topology-images.outputs.cache-hit != 'true' }}
+        run: |
+          docker save --output "${{ runner.temp }}/search-topology-images.tar" \
+            localhost/search-pipeline/orchestrator-svc:latest \
+            localhost/search-pipeline/persistence-svc:latest \
+            localhost/search-pipeline/cache-invalidation-svc:latest \
+            localhost/search-pipeline/index-document-svc:latest \
+            localhost/search-pipeline/tokenize-content-svc:latest \
+            localhost/search-pipeline/crawl-source-svc:latest \
+            localhost/search-pipeline/parse-document-svc:latest \
+            localhost/search-pipeline/embed-content-svc:latest
+
+      - name: Save Search topology images
+        if: ${{ steps.search-topology-images.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/search-topology-images.tar
+          key: ${{ steps.search-topology-images.outputs['cache-primary-key'] }}
+
+      - name: Run Search pipeline end-to-end test
+        run: |
+          read -r -a maven_args <<< "$MAVEN_ARGS"
+          ./mvnw "${maven_args[@]}" -f search/pom.xml \
+            -pl orchestrator-svc \
+            -am \
+            -DskipUnitTests=true \
+            -DskipNative=true \
+            -Dquarkus.container-image.build=false \
+            -Dfailsafe.failIfNoSpecifiedTests=false \
+            -Dit.test=SearchPipelineEndToEndIT \
+            verify
+
+      - name: Dump reports on failure
+        if: failure()
+        run: |
+          find search -path "*/target/failsafe-reports/*.txt" -print -exec tail -n 200 {} \;
+          find search -path "*/target/failsafe-reports/*.dumpstream" -print -exec tail -n 400 {} \;
+          find search -path "*/target/failsafe-reports/*.dump" -print -exec tail -n 200 {} \;
+          find search -path "*/target/surefire-reports/*.txt" -print -exec tail -n 200 {} \;
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: search-pipeline-e2e-reports
+          path: |
+            search/**/target/surefire-reports/*.txt
+            search/**/target/surefire-reports/*.xml
+            search/**/target/failsafe-reports/*.txt
+            search/**/target/failsafe-reports/*.xml
+            search/**/target/failsafe-reports/*.dumpstream
+            search/**/target/failsafe-reports/*.dump
+          retention-days: 7
+          if-no-files-found: warn

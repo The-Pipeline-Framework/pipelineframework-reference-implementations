@@ -1,0 +1,64 @@
+name: Reusable — Checkout TPFGo Smoke
+
+on:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-e2e-checkout-tpfgo
+  cancel-in-progress: true
+
+env:
+  MAVEN_OPTS: -Xmx1g -Xms512m
+  MAVEN_ARGS_BUILD: -B -T 1C -V -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.parallel=none -Dfailsafe.parallel=none -Dmaven.repo.local=${{ github.workspace }}/.m2/repository
+
+jobs:
+  checkout-tpfgo-smoke:
+    name: Checkout TPFGo Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Configure Maven
+        run: echo "MAVEN_ARGS=${{ env.MAVEN_ARGS_BUILD }} --no-transfer-progress" >> $GITHUB_ENV
+
+      - name: Run TPFGo happy-path checkpoint smoke test
+        run: |
+          read -r -a maven_args <<< "$MAVEN_ARGS"
+          ./mvnw "${maven_args[@]}" -f checkout/pom.xml \
+            -pl tpfgo-e2e-tests \
+            -am \
+            -Dtest=NoMatchingUnitTest \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            -Dit.test=TpfgoCheckpointFlowIT#executesFullCanonicalTpfgoFlowOverGrpcCheckpointHandoff \
+            -Dfailsafe.failIfNoSpecifiedTests=false \
+            -Dquarkus.container-image.build=false \
+            verify
+
+      - name: Dump reports on failure
+        if: failure()
+        run: |
+          find checkout -path "*/target/surefire-reports/*.txt" -print -exec tail -n 200 {} \;
+          find checkout -path "*/target/failsafe-reports/*.txt" -print -exec tail -n 200 {} \;
+
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: checkout-tpfgo-smoke-reports
+          path: |
+            checkout/**/target/surefire-reports/*.txt
+            checkout/**/target/surefire-reports/*.xml
+            checkout/**/target/failsafe-reports/*.txt
+            checkout/**/target/failsafe-reports/*.xml
+          retention-days: 7
+          if-no-files-found: warn
