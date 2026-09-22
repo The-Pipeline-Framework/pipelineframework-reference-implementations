@@ -47,6 +47,7 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
+          cache-path: ${{ github.workspace }}/.m2/repository
 
       - name: Verify
         run: >-
