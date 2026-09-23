@@ -24,3 +24,12 @@ applications such as CSV Payments and RAG Turnkey have separate ownership and re
 ```
 
 The reactor is intentionally non-publishable. All TPF dependencies resolve as released Maven artifacts.
+
+## Cross-repository system-test suites
+
+The coordinator consumes the stable suite entrypoints in `.github/tpf-system-tests.json`. `core` runs the
+Maven reactor; `checkout`, `search`, and `quickbooks` run the corresponding owner-controlled integration and
+end-to-end checks. The `cloud` entrypoint fails closed: AWS Modular and Azure Functions deployments require
+this repository's GitHub Actions OIDC identity and cloud role/subscription configuration, which the
+coordinator's credential-free test jobs do not receive. Run those deployments through the existing owner
+workflows, `e2e-search-aws-modular.yml` or `e2e-search-azure-functions.yml`.

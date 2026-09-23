@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "suites": {
+    "core": {"command": ["./scripts/system-tests.sh", "core"], "timeoutMinutes": 60},
+    "checkout": {"command": ["./scripts/system-tests.sh", "checkout"], "timeoutMinutes": 90},
+    "search": {"command": ["./scripts/system-tests.sh", "search"], "timeoutMinutes": 180},
+    "quickbooks": {"command": ["./scripts/system-tests.sh", "quickbooks"], "timeoutMinutes": 45},
+    "cloud": {"command": ["./scripts/system-tests.sh", "cloud"], "timeoutMinutes": 10}
+  }
+}

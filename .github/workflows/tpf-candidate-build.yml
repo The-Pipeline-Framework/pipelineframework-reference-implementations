@@ -1,0 +1,88 @@
+name: TPF Candidate Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tpf-candidate-build-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Owner verification / ${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [checkout, search, quickbooks]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-path: ${{ github.workspace }}/.m2/repository
+      - name: Configure Docker for Search E2E
+        if: matrix.suite == 'search'
+        uses: ./.github/actions/setup-testcontainers
+        with:
+          images: |
+            testcontainers/ryuk:0.13.0
+            alpine:3.17
+      - name: Run complete owner CI suite
+        env:
+          SUITE: ${{ matrix.suite }}
+          MAVEN_ARGS: -B -T 1 -V -Dmaven.test.redirectTestOutputToFile=true -Dsurefire.parallel=none -Dfailsafe.parallel=none -Dmaven.repo.local=${{ github.workspace }}/.m2/repository --no-transfer-progress
+        run: ./scripts/system-tests.sh "$SUITE"
+
+  candidate:
+    name: Create immutable source candidate
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Prepare candidate metadata
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+        run: bash scripts/prepare-candidate.sh "$EVENT_NAME" "${PR_NUMBER:--}" "$SOURCE_SHA"
+      - name: Create checksummed build provenance handoff
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/tpf-candidate-build"
+          cp "$RUNNER_TEMP/tpf-candidate-version.json" "$RUNNER_TEMP/tpf-candidate-build/candidate-manifest.json"
+          python3 scripts/create-build-metadata.py "$RUNNER_TEMP/tpf-candidate-build"
+          (cd "$RUNNER_TEMP/tpf-candidate-build" && sha256sum build-metadata.json > build-metadata.sha256)
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: tpf-candidate-build
+          path: ${{ runner.temp }}/tpf-candidate-build
+          if-no-files-found: error
+          retention-days: 7
