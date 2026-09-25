@@ -196,6 +196,7 @@ class SearchReplayEndToEndIT {
 
     private static final GenericContainer<?> persistenceService =
         new GenericContainer<>(PERSISTENCE_IMAGE)
+            .dependsOn(postgres)
             .withNetwork(NETWORK)
             .withNetworkAliases("persistence-svc")
             .withFileSystemBind(
