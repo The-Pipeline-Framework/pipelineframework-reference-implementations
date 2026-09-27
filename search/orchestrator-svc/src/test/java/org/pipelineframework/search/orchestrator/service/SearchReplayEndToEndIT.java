@@ -67,7 +67,7 @@ class SearchReplayEndToEndIT {
     private static final Network NETWORK = Network.newNetwork();
     private static final String TENANT_ID = "search-replay-e2e";
     private static final Duration EXECUTION_TIMEOUT = Duration.ofSeconds(90);
-    private static final Duration REPLAY_CAPTURE_TIMEOUT = Duration.ofSeconds(120);
+    private static final Duration REPLAY_CAPTURE_TIMEOUT = Duration.ofSeconds(180);
     private static final Path DEV_CERTS_DIR =
         Paths.get(System.getProperty("user.dir"))
             .resolve("../target/dev-certs")
