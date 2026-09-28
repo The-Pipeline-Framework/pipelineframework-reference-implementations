@@ -24,11 +24,13 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -68,7 +70,7 @@ class SearchReplayEndToEndIT {
     private static final Network NETWORK = Network.newNetwork();
     private static final String TENANT_ID = "search-replay-e2e";
     private static final Duration EXECUTION_TIMEOUT = Duration.ofSeconds(90);
-    private static final Duration REPLAY_CAPTURE_TIMEOUT = Duration.ofSeconds(180);
+    private static final Duration REPLAY_CAPTURE_TIMEOUT = Duration.ofSeconds(120);
     private static final Path DEV_CERTS_DIR =
         Paths.get(System.getProperty("user.dir"))
             .resolve("../target/dev-certs")
@@ -299,8 +301,8 @@ class SearchReplayEndToEndIT {
             .waitingFor(Wait.forHttp("/q/health").forPort(8080).withStartupTimeout(Duration.ofSeconds(90)));
 
     @BeforeAll
-    static void startServices() throws IOException {
-        Files.createDirectories(REPLAY_CAPTURE_DIR);
+    static void startServices() throws Exception {
+        prepareReplayDirectory();
         Files.createDirectories(WARM_CACHE_REPLAY_FILE.getParent());
         Files.createDirectories(CACHE_HIT_REPLAY_FILE.getParent());
         clearReplayDirectory();
@@ -316,6 +318,10 @@ class SearchReplayEndToEndIT {
             cacheInvalidationService,
             orchestratorService))
             .join();
+        var writeProbe = orchestratorService.execInContainer(
+            "sh", "-c", "touch /work/replay/.write-probe && rm /work/replay/.write-probe");
+        assertEquals(0, writeProbe.getExitCode(),
+            () -> "Replay capture directory is not writable by orchestrator container: " + writeProbe.getStderr());
     }
 
     @AfterAll
@@ -661,6 +667,15 @@ class SearchReplayEndToEndIT {
             for (Path file : stream.toList()) {
                 Files.deleteIfExists(file);
             }
+        }
+    }
+
+    private static void prepareReplayDirectory() throws IOException {
+        Files.createDirectories(REPLAY_CAPTURE_DIR);
+        try {
+            Files.setPosixFilePermissions(REPLAY_CAPTURE_DIR, EnumSet.allOf(PosixFilePermission.class));
+        } catch (UnsupportedOperationException ignored) {
+            LOG.debug("POSIX permissions are unavailable for the replay capture directory");
         }
     }
 

@@ -27,6 +27,8 @@ run_search() {
     -Dquarkus.otel.logs.enabled=false \
     -Dquarkus.otel.exporter.otlp.enabled=false \
     -Dquarkus.micrometer.export.prometheus.enabled=false \
+    -Dquarkus.micrometer.binder.http-server.enabled=false \
+    -Dquarkus.micrometer.binder.http-client.enabled=false \
     clean install
   ./mvnw "${maven_args[@]}" -f search/pom.xml -pl orchestrator-svc -am \
     -DskipUnitTests=true -DskipNative=true -Dquarkus.container-image.build=false \
