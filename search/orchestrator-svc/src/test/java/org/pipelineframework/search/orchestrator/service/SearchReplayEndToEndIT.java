@@ -409,8 +409,13 @@ class SearchReplayEndToEndIT {
 
         await()
             .atMost(REPLAY_CAPTURE_TIMEOUT)
-            .until(() -> countReplayFiles(REPLAY_CAPTURE_DIR) == URL_COUNT);
-        assertEquals(urls.size(), countReplayFiles(REPLAY_CAPTURE_DIR));
+            .untilAsserted(() -> {
+                long replayFileCount = countReplayFiles(REPLAY_CAPTURE_DIR);
+                assertEquals(urls.size(), replayFileCount,
+                    () -> "Expected one replay document per execution but found " + replayFileCount
+                        + " for " + urls.size() + " executions"
+                        + diagnosticLogTail());
+            });
         return mergeReplayDocuments(REPLAY_CAPTURE_DIR, outputFile);
     }
 
