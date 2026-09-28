@@ -23,7 +23,9 @@ run_search() {
     -Dquarkus.container-image.build=true clean install
   ./mvnw "${maven_args[@]}" -f search/pom.xml -pl orchestrator-svc -am \
     -DskipUnitTests=true -DskipNative=true -Dquarkus.container-image.build=false \
-    -Dfailsafe.failIfNoSpecifiedTests=false -Dit.test=SearchPipelineEndToEndIT verify
+    -Dsearch.replay.synthetic-url-count="${SEARCH_REPLAY_SYNTHETIC_URL_COUNT:-10}" \
+    -Dfailsafe.failIfNoSpecifiedTests=false \
+    -Dit.test=SearchPipelineEndToEndIT,SearchReplayEndToEndIT verify
 }
 
 docker_env() {
