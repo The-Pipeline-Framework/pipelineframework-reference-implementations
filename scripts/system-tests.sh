@@ -20,10 +20,21 @@ run_search() {
 
   docker_env
   ./mvnw "${maven_args[@]}" -f search/pom.xml -DskipTests -DskipNative=true \
-    -Dquarkus.container-image.build=true clean install
+    -Dquarkus.container-image.build=true \
+    -Dquarkus.otel.enabled=true \
+    -Dquarkus.otel.traces.enabled=true \
+    -Dquarkus.otel.metrics.enabled=false \
+    -Dquarkus.otel.logs.enabled=false \
+    -Dquarkus.otel.exporter.otlp.enabled=false \
+    -Dquarkus.micrometer.export.prometheus.enabled=false \
+    -Dquarkus.micrometer.binder.http-server.enabled=false \
+    -Dquarkus.micrometer.binder.http-client.enabled=false \
+    clean install
   ./mvnw "${maven_args[@]}" -f search/pom.xml -pl orchestrator-svc -am \
     -DskipUnitTests=true -DskipNative=true -Dquarkus.container-image.build=false \
-    -Dfailsafe.failIfNoSpecifiedTests=false -Dit.test=SearchPipelineEndToEndIT verify
+    -Dsearch.replay.synthetic-url-count="${SEARCH_REPLAY_SYNTHETIC_URL_COUNT:-10}" \
+    -Dfailsafe.failIfNoSpecifiedTests=false \
+    -Dit.test=SearchPipelineEndToEndIT,SearchReplayEndToEndIT verify
 }
 
 docker_env() {
@@ -47,7 +58,9 @@ docker_env() {
 
 case "$suite" in
   core)
-    ./mvnw "${maven_args[@]}" -f pom.xml clean verify
+    ./mvnw "${maven_args[@]}" -f pom.xml \
+      -Dsearch.replay.synthetic-url-count="${SEARCH_REPLAY_SYNTHETIC_URL_COUNT:-10}" \
+      clean verify
     ;;
   checkout)
     ./mvnw "${maven_args[@]}" -f checkout/pom.xml -pl tpfgo-e2e-tests -am \

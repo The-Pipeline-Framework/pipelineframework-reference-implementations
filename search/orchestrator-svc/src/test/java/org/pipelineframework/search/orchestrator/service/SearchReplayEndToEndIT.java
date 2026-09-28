@@ -24,11 +24,13 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -39,6 +41,7 @@ import javax.net.ssl.X509TrustManager;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.awaitility.core.ConditionTimeoutException;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -287,7 +290,6 @@ class SearchReplayEndToEndIT {
             .withEnv("QUARKUS_OTEL_METRICS_ENABLED", "false")
             .withEnv("QUARKUS_OTEL_TRACES_ENABLED", "true")
             .withEnv("QUARKUS_OTEL_LOGS_ENABLED", "false")
-            .withEnv("QUARKUS_OTEL_EXPORTER_OTLP_ENABLED", "false")
             .withEnv("QUARKUS_OTEL_TRACES_SAMPLER", "parentbased_always_on")
             .withEnv("QUARKUS_OTEL_TRACES_SAMPLER_ARG", "1.0")
             .withEnv("PIPELINE_TELEMETRY_ENABLED", "true")
@@ -299,8 +301,8 @@ class SearchReplayEndToEndIT {
             .waitingFor(Wait.forHttp("/q/health").forPort(8080).withStartupTimeout(Duration.ofSeconds(90)));
 
     @BeforeAll
-    static void startServices() throws IOException {
-        Files.createDirectories(REPLAY_CAPTURE_DIR);
+    static void startServices() throws Exception {
+        prepareReplayDirectory();
         Files.createDirectories(WARM_CACHE_REPLAY_FILE.getParent());
         Files.createDirectories(CACHE_HIT_REPLAY_FILE.getParent());
         clearReplayDirectory();
@@ -316,6 +318,10 @@ class SearchReplayEndToEndIT {
             cacheInvalidationService,
             orchestratorService))
             .join();
+        var writeProbe = orchestratorService.execInContainer(
+            "sh", "-c", "touch /work/replay/.write-probe && rm /work/replay/.write-probe");
+        assertEquals(0, writeProbe.getExitCode(),
+            () -> "Replay capture directory is not writable by orchestrator container: " + writeProbe.getStderr());
     }
 
     @AfterAll
@@ -407,10 +413,18 @@ class SearchReplayEndToEndIT {
                 .toList()
                 + diagnosticLogTail());
 
-        await()
-            .atMost(REPLAY_CAPTURE_TIMEOUT)
-            .until(() -> countReplayFiles(REPLAY_CAPTURE_DIR) == URL_COUNT);
-        assertEquals(urls.size(), countReplayFiles(REPLAY_CAPTURE_DIR));
+        try {
+            await()
+                .atMost(REPLAY_CAPTURE_TIMEOUT)
+                .untilAsserted(() -> {
+                    long replayFileCount = countReplayFiles(REPLAY_CAPTURE_DIR);
+                    assertEquals(urls.size(), replayFileCount,
+                        () -> "Expected one replay document per execution but found " + replayFileCount
+                            + " for " + urls.size() + " executions");
+                });
+        } catch (ConditionTimeoutException timeout) {
+            throw new AssertionError(timeout.getMessage() + diagnosticLogTail(), timeout);
+        }
         return mergeReplayDocuments(REPLAY_CAPTURE_DIR, outputFile);
     }
 
@@ -653,6 +667,15 @@ class SearchReplayEndToEndIT {
             for (Path file : stream.toList()) {
                 Files.deleteIfExists(file);
             }
+        }
+    }
+
+    private static void prepareReplayDirectory() throws IOException {
+        Files.createDirectories(REPLAY_CAPTURE_DIR);
+        try {
+            Files.setPosixFilePermissions(REPLAY_CAPTURE_DIR, EnumSet.allOf(PosixFilePermission.class));
+        } catch (UnsupportedOperationException ignored) {
+            LOG.debug("POSIX permissions are unavailable for the replay capture directory");
         }
     }
 
