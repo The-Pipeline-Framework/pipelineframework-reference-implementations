@@ -47,7 +47,9 @@ docker_env() {
 
 case "$suite" in
   core)
-    ./mvnw "${maven_args[@]}" -f pom.xml clean verify
+    ./mvnw "${maven_args[@]}" -f pom.xml \
+      -Dsearch.replay.synthetic-url-count="${SEARCH_REPLAY_SYNTHETIC_URL_COUNT:-10}" \
+      clean verify
     ;;
   checkout)
     ./mvnw "${maven_args[@]}" -f checkout/pom.xml -pl tpfgo-e2e-tests -am \
