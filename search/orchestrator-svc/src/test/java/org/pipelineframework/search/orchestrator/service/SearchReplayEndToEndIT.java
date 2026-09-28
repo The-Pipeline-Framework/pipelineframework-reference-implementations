@@ -39,6 +39,7 @@ import javax.net.ssl.X509TrustManager;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import org.awaitility.core.ConditionTimeoutException;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -287,7 +288,6 @@ class SearchReplayEndToEndIT {
             .withEnv("QUARKUS_OTEL_METRICS_ENABLED", "false")
             .withEnv("QUARKUS_OTEL_TRACES_ENABLED", "true")
             .withEnv("QUARKUS_OTEL_LOGS_ENABLED", "false")
-            .withEnv("QUARKUS_OTEL_EXPORTER_OTLP_ENABLED", "false")
             .withEnv("QUARKUS_OTEL_TRACES_SAMPLER", "parentbased_always_on")
             .withEnv("QUARKUS_OTEL_TRACES_SAMPLER_ARG", "1.0")
             .withEnv("PIPELINE_TELEMETRY_ENABLED", "true")
@@ -407,15 +407,18 @@ class SearchReplayEndToEndIT {
                 .toList()
                 + diagnosticLogTail());
 
-        await()
-            .atMost(REPLAY_CAPTURE_TIMEOUT)
-            .untilAsserted(() -> {
-                long replayFileCount = countReplayFiles(REPLAY_CAPTURE_DIR);
-                assertEquals(urls.size(), replayFileCount,
-                    () -> "Expected one replay document per execution but found " + replayFileCount
-                        + " for " + urls.size() + " executions"
-                        + diagnosticLogTail());
-            });
+        try {
+            await()
+                .atMost(REPLAY_CAPTURE_TIMEOUT)
+                .untilAsserted(() -> {
+                    long replayFileCount = countReplayFiles(REPLAY_CAPTURE_DIR);
+                    assertEquals(urls.size(), replayFileCount,
+                        () -> "Expected one replay document per execution but found " + replayFileCount
+                            + " for " + urls.size() + " executions");
+                });
+        } catch (ConditionTimeoutException timeout) {
+            throw new AssertionError(timeout.getMessage() + diagnosticLogTail(), timeout);
+        }
         return mergeReplayDocuments(REPLAY_CAPTURE_DIR, outputFile);
     }
 

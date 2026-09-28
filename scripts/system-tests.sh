@@ -20,7 +20,14 @@ run_search() {
 
   docker_env
   ./mvnw "${maven_args[@]}" -f search/pom.xml -DskipTests -DskipNative=true \
-    -Dquarkus.container-image.build=true clean install
+    -Dquarkus.container-image.build=true \
+    -Dquarkus.otel.enabled=true \
+    -Dquarkus.otel.traces.enabled=true \
+    -Dquarkus.otel.metrics.enabled=false \
+    -Dquarkus.otel.logs.enabled=false \
+    -Dquarkus.otel.exporter.otlp.enabled=false \
+    -Dquarkus.micrometer.export.prometheus.enabled=false \
+    clean install
   ./mvnw "${maven_args[@]}" -f search/pom.xml -pl orchestrator-svc -am \
     -DskipUnitTests=true -DskipNative=true -Dquarkus.container-image.build=false \
     -Dsearch.replay.synthetic-url-count="${SEARCH_REPLAY_SYNTHETIC_URL_COUNT:-10}" \
