@@ -18,6 +18,11 @@ import org.pipelineframework.context.PipelineContext;
 
 class SearchTransportRecordAdapterTest {
   @Test
+  void unsupportedTransportRecordIsNotAdapted() {
+    assertTrue(SearchTransportRecordAdapter.toEntity(new FetchHeaderDto("X-Test", "yes")).isEmpty());
+  }
+
+  @Test
   void generatedSourceRecordRetainsLegacyCacheIdentity() {
     UUID docId = UUID.randomUUID();
     CrawlRequestDto request = new CrawlRequestDto(docId, "https://example.com", "GET", "text/html",

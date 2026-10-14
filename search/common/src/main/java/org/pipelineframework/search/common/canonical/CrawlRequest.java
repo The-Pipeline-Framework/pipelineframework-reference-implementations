@@ -3,6 +3,7 @@ package org.pipelineframework.search.common.canonical;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.pipelineframework.type.CanonicalFieldValue;
 
@@ -17,6 +18,7 @@ public record CrawlRequest(
     List<FetchHeader> fetchHeaders
 ) {
   public CrawlRequest {
+    authScope = Objects.requireNonNull(authScope, "authScope must not be null");
     fetchHeaders = List.copyOf(fetchHeaders);
   }
 

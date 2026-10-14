@@ -38,17 +38,17 @@ public final class SearchTransportRecordAdapter {
     if (name.equals("CrawlRequestDto")) {
       return Optional.of(crawlRequest(value));
     }
-    Class<?> canonicalType = switch (name) {
-      case "RawDocumentDto" -> RawDocument.class;
-      case "ParsedDocumentDto" -> ParsedDocument.class;
-      case "TokenBatchDto" -> TokenBatch.class;
-      case "EmbeddedChunkDto" -> EmbeddedChunk.class;
-      case "SearchIndexDocumentDto" -> SearchIndexDocument.class;
-      case "SearchIndexWriteResultDto" -> SearchIndexWriteResult.class;
-      case "IndexAckDto" -> IndexAck.class;
-      default -> throw new IllegalArgumentException("Unsupported Search transport record: " + name);
+    Optional<Class<?>> canonicalType = switch (name) {
+      case "RawDocumentDto" -> Optional.of(RawDocument.class);
+      case "ParsedDocumentDto" -> Optional.of(ParsedDocument.class);
+      case "TokenBatchDto" -> Optional.of(TokenBatch.class);
+      case "EmbeddedChunkDto" -> Optional.of(EmbeddedChunk.class);
+      case "SearchIndexDocumentDto" -> Optional.of(SearchIndexDocument.class);
+      case "SearchIndexWriteResultDto" -> Optional.of(SearchIndexWriteResult.class);
+      case "IndexAckDto" -> Optional.of(IndexAck.class);
+      default -> Optional.empty();
     };
-    return Optional.of(convert(value, canonicalType));
+    return canonicalType.map(type -> convert(value, type));
   }
 
   private static Object convert(Object transport, Class<?> canonicalType) {
