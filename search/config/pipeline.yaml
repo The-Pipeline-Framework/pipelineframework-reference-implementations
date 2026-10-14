@@ -1,55 +1,27 @@
-version: 2
+version: 3
 appName: Search Pipeline
 basePackage: org.pipelineframework.search
 transport: REST
 platform: COMPUTE
-aspects:
-  persistence:
-    enabled: true
-    scope: GLOBAL
-    position: AFTER_STEP
-    order: 0
-    config:
-      pluginImplementationClass: org.pipelineframework.plugin.persistence.PersistenceService
-  cache:
-    enabled: true
-    scope: GLOBAL
-    position: AFTER_STEP
-    order: 5
-    config:
-      pluginImplementationClass: org.pipelineframework.plugin.cache.CacheService
-  cache-invalidate:
-    enabled: true
-    scope: STEPS
-    position: BEFORE_STEP
-    order: -4
-    config:
-      targetSteps:
-        - ProcessTokenizeContentService
-      pluginImplementationClass: org.pipelineframework.plugin.cache.CacheInvalidationService
-  cache-invalidate-all:
-    enabled: true
-    scope: STEPS
-    position: BEFORE_STEP
-    order: -5
-    config:
-      targetSteps:
-        - ProcessParseDocumentService
-      pluginImplementationClass: org.pipelineframework.plugin.cache.CacheInvalidationAllService
 types:
+  FetchHeader:
+    java: org.pipelineframework.search.common.canonical.FetchHeader
+    fields:
+      - [name, string]
+      - [value, string]
   CrawlRequest:
+    java: org.pipelineframework.search.common.canonical.CrawlRequest
     fields:
       - [docId, uuid]
       - [sourceUrl, string]
       - [fetchMethod, string]
       - [accept, string]
       - [acceptLanguage, string]
-      - [authScope, string]
+      - ['authScope?', string]
       - name: fetchHeaders
-        type: map
-        keyType: string
-        valueType: string
+        repeated: FetchHeader
   RawDocument:
+    java: org.pipelineframework.search.common.canonical.RawDocument
     fields:
       - [docId, uuid]
       - [sourceUrl, string]
@@ -58,6 +30,7 @@ types:
       - [rawContentHash, string]
       - [fetchedAt, timestamp]
   ParsedDocument:
+    java: org.pipelineframework.search.common.canonical.ParsedDocument
     fields:
       - [docId, uuid]
       - [title, string]
@@ -66,6 +39,7 @@ types:
       - [rawContentHash, string]
       - [extractedAt, timestamp]
   TokenBatch:
+    java: org.pipelineframework.search.common.canonical.TokenBatch
     fields:
       - [docId, uuid]
       - [batchIndex, int32]
@@ -75,6 +49,7 @@ types:
       - [contentHash, string]
       - [tokenizedAt, timestamp]
   EmbeddedChunk:
+    java: org.pipelineframework.search.common.canonical.EmbeddedChunk
     fields:
       - [docId, uuid]
       - [batchIndex, int32]
@@ -86,6 +61,7 @@ types:
       - [vectorVersion, string]
       - [embeddedAt, timestamp]
   SearchIndexDocument:
+    java: org.pipelineframework.search.common.canonical.SearchIndexDocument
     fields:
       - [docId, uuid]
       - [externalId, string]
@@ -99,6 +75,7 @@ types:
       - [indexName, string]
       - [preparedAt, timestamp]
   SearchIndexWriteResult:
+    java: org.pipelineframework.search.common.canonical.SearchIndexWriteResult
     fields:
       - [docId, uuid]
       - [externalId, string]
@@ -115,6 +92,7 @@ types:
       - [vectorVersion, string]
       - [indexedAt, timestamp]
   IndexAck:
+    java: org.pipelineframework.search.common.canonical.IndexAck
     fields:
       - [docId, uuid]
       - [indexVersion, string]
@@ -125,67 +103,95 @@ types:
       - [indexedAt, timestamp]
       - [success, bool]
 steps:
-  - name: Crawl Source
-    service: org.pipelineframework.search.crawl_source.service.ProcessCrawlSourceService
-    cardinality: ONE_TO_ONE
-    input: org.pipelineframework.search.common.domain.CrawlRequest
-    inputTypeName: CrawlRequest
-    inboundMapper: org.pipelineframework.search.common.mapper.CrawlRequestMapper
-    output: org.pipelineframework.search.common.domain.RawDocument
-    outputTypeName: RawDocument
-    outboundMapper: org.pipelineframework.search.common.mapper.RawDocumentMapper
-  - name: Parse Document
-    service: org.pipelineframework.search.parse_document.service.ProcessParseDocumentService
-    cardinality: ONE_TO_ONE
-    input: org.pipelineframework.search.common.domain.RawDocument
-    inputTypeName: RawDocument
-    inboundMapper: org.pipelineframework.search.common.mapper.RawDocumentMapper
-    output: org.pipelineframework.search.common.domain.ParsedDocument
-    outputTypeName: ParsedDocument
-    outboundMapper: org.pipelineframework.search.common.mapper.ParsedDocumentMapper
-  - name: Tokenize Content
-    service: org.pipelineframework.search.tokenize_content.service.ProcessTokenizeContentService
-    cardinality: ONE_TO_MANY
-    input: org.pipelineframework.search.common.domain.ParsedDocument
-    inputTypeName: ParsedDocument
-    inboundMapper: org.pipelineframework.search.common.mapper.ParsedDocumentMapper
-    output: org.pipelineframework.search.common.domain.TokenBatch
-    outputTypeName: TokenBatch
-    outboundMapper: org.pipelineframework.search.common.mapper.TokenBatchMapper
-  - name: Embed Content
-    service: org.pipelineframework.search.embed_content.service.ProcessEmbedContentService
-    cardinality: ONE_TO_ONE
-    input: org.pipelineframework.search.common.domain.TokenBatch
-    inputTypeName: TokenBatch
-    inboundMapper: org.pipelineframework.search.common.mapper.TokenBatchMapper
-    output: org.pipelineframework.search.common.domain.EmbeddedChunk
-    outputTypeName: EmbeddedChunk
-    outboundMapper: org.pipelineframework.search.common.mapper.EmbeddedChunkMapper
-  - name: Build Search Index Document
-    service: org.pipelineframework.search.index_document.service.ProcessBuildSearchIndexDocumentService
-    cardinality: ONE_TO_ONE
-    input: org.pipelineframework.search.common.domain.EmbeddedChunk
-    inputTypeName: EmbeddedChunk
-    inboundMapper: org.pipelineframework.search.common.mapper.EmbeddedChunkMapper
-    output: org.pipelineframework.search.common.domain.SearchIndexDocument
-    outputTypeName: SearchIndexDocument
-    outboundMapper: org.pipelineframework.search.common.mapper.SearchIndexDocumentMapper
-  - name: Write Search Index Document
-    kind: command
-    command: opensearch-index-document
-    cardinality: ONE_TO_ONE
-    input: org.pipelineframework.search.common.domain.SearchIndexDocument
-    inputTypeName: SearchIndexDocument
-    output: org.pipelineframework.search.common.domain.SearchIndexWriteResult
-    outputTypeName: SearchIndexWriteResult
-    commandIdGenerator: org.pipelineframework.search.common.command.SearchIndexDocumentCommandIdGenerator
-    duplicatePolicy: RETURN_RECORDED
-  - name: Summarize Index Writes
-    service: org.pipelineframework.search.index_document.service.ProcessSummarizeIndexWritesService
-    cardinality: MANY_TO_ONE
-    input: org.pipelineframework.search.common.domain.SearchIndexWriteResult
-    inputTypeName: SearchIndexWriteResult
-    inboundMapper: org.pipelineframework.search.common.mapper.SearchIndexWriteResultMapper
-    output: org.pipelineframework.search.common.domain.IndexAck
-    outputTypeName: IndexAck
-    outboundMapper: org.pipelineframework.search.common.mapper.IndexAckMapper
+- name: Crawl Source
+  service: org.pipelineframework.search.crawl_source.service.CanonicalCrawlSourceService
+  cardinality: ONE_TO_ONE
+  input: CrawlRequest
+  output: RawDocument
+  java:
+    input: org.pipelineframework.search.common.canonical.CrawlRequest
+    output: org.pipelineframework.search.common.canonical.RawDocument
+- name: Parse Document
+  service: org.pipelineframework.search.parse_document.service.CanonicalParseDocumentService
+  cardinality: ONE_TO_ONE
+  input: RawDocument
+  output: ParsedDocument
+  java:
+    input: org.pipelineframework.search.common.canonical.RawDocument
+    output: org.pipelineframework.search.common.canonical.ParsedDocument
+- name: Tokenize Content
+  service: org.pipelineframework.search.tokenize_content.service.CanonicalTokenizeContentService
+  cardinality: ONE_TO_MANY
+  input: ParsedDocument
+  output: TokenBatch
+  java:
+    input: org.pipelineframework.search.common.canonical.ParsedDocument
+    output: org.pipelineframework.search.common.canonical.TokenBatch
+- name: Embed Content
+  service: org.pipelineframework.search.embed_content.service.CanonicalEmbedContentService
+  cardinality: ONE_TO_ONE
+  input: TokenBatch
+  output: EmbeddedChunk
+  java:
+    input: org.pipelineframework.search.common.canonical.TokenBatch
+    output: org.pipelineframework.search.common.canonical.EmbeddedChunk
+- name: Build Search Index Document
+  service: org.pipelineframework.search.index_document.service.CanonicalBuildSearchIndexDocumentService
+  cardinality: ONE_TO_ONE
+  input: EmbeddedChunk
+  output: SearchIndexDocument
+  java:
+    input: org.pipelineframework.search.common.canonical.EmbeddedChunk
+    output: org.pipelineframework.search.common.canonical.SearchIndexDocument
+- name: Write Search Index Document
+  kind: command
+  command: opensearch-index-document-v3
+  commandIdGenerator: org.pipelineframework.search.common.command.CanonicalSearchIndexDocumentCommandIdGenerator
+  duplicatePolicy: RETURN_RECORDED
+  cardinality: ONE_TO_ONE
+  input: SearchIndexDocument
+  output: SearchIndexWriteResult
+  java:
+    input: org.pipelineframework.search.common.canonical.SearchIndexDocument
+    output: org.pipelineframework.search.common.canonical.SearchIndexWriteResult
+- name: Summarize Index Writes
+  service: org.pipelineframework.search.index_document.service.CanonicalSummarizeIndexWritesService
+  cardinality: MANY_TO_ONE
+  input: SearchIndexWriteResult
+  output: IndexAck
+  java:
+    input: org.pipelineframework.search.common.canonical.SearchIndexWriteResult
+    output: org.pipelineframework.search.common.canonical.IndexAck
+aspects:
+  persistence:
+    enabled: true
+    scope: GLOBAL
+    position: AFTER_STEP
+    order: 0
+    config:
+      pluginImplementationClass: org.pipelineframework.search.persistence.SearchPersistenceService
+  cache:
+    enabled: true
+    scope: GLOBAL
+    position: AFTER_STEP
+    order: 5
+    config:
+      pluginImplementationClass: org.pipelineframework.plugin.cache.CacheService
+  cache-invalidate:
+    enabled: true
+    scope: STEPS
+    position: BEFORE_STEP
+    order: -4
+    config:
+      targetSteps:
+      - Tokenize Content
+      pluginImplementationClass: org.pipelineframework.plugin.cache.CacheInvalidationService
+  cache-invalidate-all:
+    enabled: true
+    scope: STEPS
+    position: BEFORE_STEP
+    order: -5
+    config:
+      targetSteps:
+      - Parse Document
+      pluginImplementationClass: org.pipelineframework.plugin.cache.CacheInvalidationAllService

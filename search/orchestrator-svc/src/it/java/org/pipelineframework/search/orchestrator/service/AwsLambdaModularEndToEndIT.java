@@ -164,12 +164,14 @@ class AwsLambdaModularEndToEndIT {
     }
 
     private ObjectNode createCrawlRequest(UUID docId, String sourceUrl) {
-        return OBJECT_MAPPER.createObjectNode()
+        ObjectNode request = OBJECT_MAPPER.createObjectNode()
             .put("docId", docId.toString())
             .put("sourceUrl", sourceUrl)
             .put("fetchMethod", "GET")
             .put("accept", "text/html")
             .put("acceptLanguage", "en-US");
+        request.putArray("fetchHeaders");
+        return request;
     }
 
     private String generateLongTestContent() {

@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import io.quarkus.arc.Unremovable;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.SearchIndexDocument;
 import org.pipelineframework.search.common.domain.SearchIndexWriteResult;
 import org.pipelineframework.search.common.dto.SearchIndexDocumentDto;
@@ -17,6 +18,7 @@ public class SearchIndexWriteResultCacheKeyStrategy implements CacheKeyStrategy 
 
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     return identity(item).map(identity -> SearchIndexWriteResult.class.getName()
         + ":doc=" + identity.docId()
         + ":external=" + identity.externalId()
@@ -34,7 +36,8 @@ public class SearchIndexWriteResultCacheKeyStrategy implements CacheKeyStrategy 
 
   @Override
   public boolean supportsTarget(Class<?> targetType) {
-    return targetType == SearchIndexWriteResult.class || targetType == SearchIndexWriteResultDto.class;
+    return targetType == SearchIndexWriteResult.class || targetType == SearchIndexWriteResultDto.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "SearchIndexWriteResult");
   }
 
   private Optional<Identity> identity(Object item) {

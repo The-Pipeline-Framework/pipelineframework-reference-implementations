@@ -585,7 +585,9 @@ class SearchPipelineEndToEndIT {
     ) throws Exception {
         String baseUrl = "http://" + orchestratorService.getHost() + ":" +
             orchestratorService.getMappedPort(8080) + "/pipeline";
-        String payload = "{\"docId\":\"" + stableDocId(input) + "\",\"sourceUrl\":\"" + input + "\"}";
+        String payload = "{\"docId\":\"" + stableDocId(input)
+            + "\",\"sourceUrl\":\"" + input
+            + "\",\"fetchMethod\":\"GET\",\"accept\":\"text/html\",\"acceptLanguage\":\"en-US\",\"fetchHeaders\":[]}";
         String idempotencyKey = "search-e2e:" + UUID.randomUUID();
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + "/run-async"))
             .header("Content-Type", "application/json")

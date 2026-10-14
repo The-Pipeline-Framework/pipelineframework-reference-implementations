@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import io.quarkus.arc.Unremovable;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.CrawlRequest;
 import org.pipelineframework.search.common.domain.RawDocument;
 import org.pipelineframework.search.common.dto.CrawlRequestDto;
@@ -32,6 +33,7 @@ public class CrawlCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     String sourceUrl;
     String fetchOptions;
       switch (item) {
@@ -86,6 +88,8 @@ public class CrawlCacheKeyStrategy implements CacheKeyStrategy {
   @Override
   public boolean supportsTarget(Class<?> targetType) {
     return targetType == RawDocument.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "RawDocument")
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "CrawlRequest")
         || targetType == RawDocumentDto.class
         || targetType == CrawlRequest.class
         || targetType == CrawlRequestDto.class;
