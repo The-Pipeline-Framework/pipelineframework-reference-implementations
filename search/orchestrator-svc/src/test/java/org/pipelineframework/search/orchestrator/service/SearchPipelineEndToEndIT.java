@@ -725,7 +725,16 @@ class SearchPipelineEndToEndIT {
         String url = "http://" + cacheInvalidationService.getHost() + ":" +
             cacheInvalidationService.getMappedPort(8080) +
             "/api/v1/parsed-document/cache-invalidate/";
-        String payload = "{\"docId\":\"" + docId + "\",\"rawContentHash\":\"" + rawContentHash + "\"}";
+        // This endpoint takes ParsedDocument; only rawContentHash contributes to its cache key.
+        String content = "Cached document for " + docId;
+        String payload = OBJECT_MAPPER.createObjectNode()
+            .put("docId", docId.toString())
+            .put("title", "Cache invalidation fixture")
+            .put("content", content)
+            .put("contentHash", HashingUtils.sha256Base64Url(content))
+            .put("rawContentHash", rawContentHash)
+            .put("extractedAt", "2026-10-15T00:00:00Z")
+            .toString();
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
             .header("Content-Type", "application/json")
             .header("x-pipeline-version", versionTag)
