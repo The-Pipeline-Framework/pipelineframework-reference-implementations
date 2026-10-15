@@ -17,6 +17,8 @@
 package org.pipelineframework.search.resource;
 
 import java.util.UUID;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 import io.quarkus.test.common.QuarkusTestResource;
@@ -27,6 +29,8 @@ import io.restassured.http.ContentType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
@@ -57,7 +61,10 @@ class RawDocumentResourceIT {
                 """
                 {
                   "docId": "%s",
-                  "sourceUrl": "https://example.com/docs/alpha"
+                  "sourceUrl": "https://example.com/docs/alpha",
+                  "fetchMethod": "GET",
+                  "accept": "text/html",
+                  "acceptLanguage": "en-US"
                 }
                 """
                         .formatted(UUID.randomUUID());
@@ -79,7 +86,10 @@ class RawDocumentResourceIT {
                 """
                 {
                   "docId": "invalid-uuid",
-                  "sourceUrl": "https://example.com/docs/alpha"
+                  "sourceUrl": "https://example.com/docs/alpha",
+                  "fetchMethod": "GET",
+                  "accept": "text/html",
+                  "acceptLanguage": "en-US"
                 }
                 """;
 
@@ -107,5 +117,22 @@ class RawDocumentResourceIT {
                 .post("/api/v1/raw-document/")
                 .then()
                 .statusCode(400);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"docId", "sourceUrl", "fetchMethod", "accept", "acceptLanguage"})
+    void rejectsMissingOrNullRequiredCanonicalField(String field) {
+        Map<String, Object> request = new LinkedHashMap<>(Map.of(
+                "docId", UUID.randomUUID().toString(),
+                "sourceUrl", "https://example.com/docs/alpha",
+                "fetchMethod", "GET",
+                "accept", "text/html",
+                "acceptLanguage", "en-US"));
+        request.remove(field);
+        given().contentType(ContentType.JSON).body(request)
+                .when().post("/api/v1/raw-document/").then().statusCode(400);
+        request.put(field, null);
+        given().contentType(ContentType.JSON).body(request)
+                .when().post("/api/v1/raw-document/").then().statusCode(400);
     }
 }

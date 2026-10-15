@@ -87,7 +87,10 @@ class RawDocumentResourceTest {
                 """
                 {
                   "docId": "%s",
-                  "sourceUrl": "https://example.com/docs/alpha"
+                  "sourceUrl": "https://example.com/docs/alpha",
+                  "fetchMethod": "GET",
+                  "accept": "text/html",
+                  "acceptLanguage": "en-US"
                 }
                 """
                         .formatted(UUID.randomUUID());
@@ -109,7 +112,10 @@ class RawDocumentResourceTest {
                 """
                 {
                   "docId": "invalid-uuid",
-                  "sourceUrl": "https://example.com/docs/alpha"
+                  "sourceUrl": "https://example.com/docs/alpha",
+                  "fetchMethod": "GET",
+                  "accept": "text/html",
+                  "acceptLanguage": "en-US"
                 }
                 """;
 

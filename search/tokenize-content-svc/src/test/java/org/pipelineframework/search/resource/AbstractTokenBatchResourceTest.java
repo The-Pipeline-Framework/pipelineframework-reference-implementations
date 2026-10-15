@@ -92,6 +92,10 @@ abstract class AbstractTokenBatchResourceTest {
                 """
                 {
                   "docId": "%s",
+                  "title": "Example Doc",
+                  "contentHash": "content-hash",
+                  "rawContentHash": "raw-content-hash",
+                  "extractedAt": "2026-10-15T00:00:00Z",
                   "content": "Search pipeline content for tokenization."
                 }
                 """
@@ -119,6 +123,10 @@ abstract class AbstractTokenBatchResourceTest {
                 """
                 {
                   "docId": "invalid-uuid",
+                  "title": "Example Doc",
+                  "contentHash": "content-hash",
+                  "rawContentHash": "raw-content-hash",
+                  "extractedAt": "2026-10-15T00:00:00Z",
                   "content": "Search pipeline content for tokenization."
                 }
                 """;
@@ -140,6 +148,10 @@ abstract class AbstractTokenBatchResourceTest {
                 """
                 {
                   "docId": "%s",
+                  "title": "Example Doc",
+                  "contentHash": "content-hash",
+                  "rawContentHash": "raw-content-hash",
+                  "extractedAt": "2026-10-15T00:00:00Z",
                   "content": "%s"
                 }
                 """
