@@ -64,6 +64,11 @@ class IndexAckResourceIT {
                     "batchIndex": 0,
                     "vectorHash": "vector-hash-1",
                     "createdOrUpdated": true,
+                    "recordedDuplicate": false,
+                    "resultStatus": "SUCCEEDED",
+                    "tokenCount": 3,
+                    "vectorVersion": "v1",
+                    "indexedAt": "2026-10-15T00:00:00Z",
                     "tokens": "search pipeline tokens",
                     "tokensHash": "seed-hash"
                   }
@@ -90,6 +95,17 @@ class IndexAckResourceIT {
                 [
                   {
                     "docId": "invalid-uuid",
+                    "externalId": "docs/alpha#0",
+                    "commandId": "index-command-1",
+                    "indexName": "documents",
+                    "batchIndex": 0,
+                    "vectorHash": "vector-hash-1",
+                    "createdOrUpdated": true,
+                    "recordedDuplicate": false,
+                    "resultStatus": "SUCCEEDED",
+                    "tokenCount": 3,
+                    "vectorVersion": "v1",
+                    "indexedAt": "2026-10-15T00:00:00Z",
                     "tokens": "search pipeline tokens",
                     "tokensHash": "seed-hash"
                   }

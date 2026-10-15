@@ -58,6 +58,10 @@ class ParsedDocumentResourceIT {
                 """
                 {
                   "docId": "%s",
+                  "sourceUrl": "https://example.com/docs/alpha",
+                  "fetchOptions": "method=GET",
+                  "rawContentHash": "raw-content-hash",
+                  "fetchedAt": "2026-10-15T00:00:00Z",
                   "rawContent": "Title: Example Doc\\nBody: Search pipeline content."
                 }
                 """
@@ -81,6 +85,10 @@ class ParsedDocumentResourceIT {
                 """
                 {
                   "docId": "invalid-uuid",
+                  "sourceUrl": "https://example.com/docs/alpha",
+                  "fetchOptions": "method=GET",
+                  "rawContentHash": "raw-content-hash",
+                  "fetchedAt": "2026-10-15T00:00:00Z",
                   "rawContent": "Title: Example Doc\\nBody: Search pipeline content."
                 }
                 """;
