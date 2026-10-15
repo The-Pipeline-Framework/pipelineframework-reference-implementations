@@ -3,11 +3,16 @@
 This is a generated pipeline application built with the Pipeline Framework.
 
 This example remains useful for its authored parse/chunk transformations, stable indexing identity,
-fan-out/fan-in cardinality, and separation of cache, persistence, and effect concerns. Its embedding
-service, hash-only vectors, OpenSearch-shaped domain, and v2-era mapper topology are historical rather
-than the portable RAG pattern. See the offline
+fan-out/fan-in cardinality, and separation of cache, persistence, and effect concerns. Its three
+pipeline templates use v3 canonical records; adapters keep the existing entity-based services and
+OpenSearch Command behind those boundaries. Its embedding service and hash-only vectors remain a
+historical proof rather than the portable RAG pattern. See the offline
 [RAG composition proof](../rag-composition-proof/README.md) for embedding Query, vector Command, vector
 Query, and one-turn LLM Query composition on v3.
+
+The cache boundary retains generated v3 DTO values so a cache hit has the same type as a live
+remote result. Search's cache-key adapter keeps the existing key identities, while the persistence
+host converts canonical records to its JPA entities before storage.
 
 ## Prerequisites
 
@@ -19,8 +24,8 @@ Query, and one-turn LLM Query composition on v3.
 To verify that the application was generated correctly:
 
 ```bash
-cd search
-./mvnw clean verify
+cd <repo-root>
+./mvnw -f search/pom.xml clean verify -Dmaven.repo.local="$PWD/.m2/repository"
 ```
 
 This will compile all modules, run tests, and verify that there are no syntax or dependency issues.

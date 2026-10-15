@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import io.quarkus.arc.Unremovable;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.ParsedDocument;
 import org.pipelineframework.search.common.domain.RawDocument;
 import org.pipelineframework.search.common.dto.ParsedDocumentDto;
@@ -24,6 +25,7 @@ public class ParseCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     String rawContentHash;
     if (item instanceof ParsedDocument document) {
       rawContentHash = document.rawContentHash;
@@ -60,6 +62,7 @@ public class ParseCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public boolean supportsTarget(Class<?> targetType) {
-    return targetType == ParsedDocument.class || targetType == ParsedDocumentDto.class;
+    return targetType == ParsedDocument.class || targetType == ParsedDocumentDto.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "ParsedDocument");
   }
 }

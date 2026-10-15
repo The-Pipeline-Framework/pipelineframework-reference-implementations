@@ -51,7 +51,8 @@ public interface CrawlRequestMapper extends org.pipelineframework.mapper.Mapper<
     }
     Map<String, String> fetchHeaders = dto.getFetchHeaders();
     if (fetchHeaders != null) {
-      builder.putAllFetchHeaders(fetchHeaders);
+      fetchHeaders.forEach((name, value) -> builder.addFetchHeaders(
+          PipelineTypes.FetchHeader.newBuilder().setName(name).setValue(value).build()));
     }
     return builder.build();
   }
@@ -71,7 +72,9 @@ public interface CrawlRequestMapper extends org.pipelineframework.mapper.Mapper<
     builder.accept(grpc.getAccept());
     builder.acceptLanguage(grpc.getAcceptLanguage());
     builder.authScope(grpc.getAuthScope());
-    builder.fetchHeaders(new LinkedHashMap<>(grpc.getFetchHeadersMap()));
+    Map<String, String> fetchHeaders = new LinkedHashMap<>();
+    grpc.getFetchHeadersList().forEach(header -> fetchHeaders.put(header.getName(), header.getValue()));
+    builder.fetchHeaders(fetchHeaders);
     return builder.build();
   }
 

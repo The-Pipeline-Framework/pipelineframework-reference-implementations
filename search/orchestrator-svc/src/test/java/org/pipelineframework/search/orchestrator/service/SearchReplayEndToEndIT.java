@@ -47,7 +47,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.pipelineframework.config.pipeline.PipelineJson;
-import org.pipelineframework.search.common.dto.CrawlRequestDto;
 import org.pipelineframework.telemetry.PipelineExecutionEvent;
 import org.pipelineframework.telemetry.PipelineReplayDocument;
 import org.pipelineframework.telemetry.PipelineReplayTopology;
@@ -431,10 +430,14 @@ class SearchReplayEndToEndIT {
     private static ProcessResult orchestratorTriggerRun(String input, String versionTag, boolean replay) throws Exception {
         String baseUrl = "http://" + orchestratorService.getHost() + ":" +
             orchestratorService.getMappedPort(8080) + "/pipeline";
-        String payload = OBJECT_MAPPER.writeValueAsString(CrawlRequestDto.builder()
-            .docId(stableDocId(input))
-            .sourceUrl(input)
-            .build());
+        var request = OBJECT_MAPPER.createObjectNode()
+            .put("docId", stableDocId(input).toString())
+            .put("sourceUrl", input)
+            .put("fetchMethod", "GET")
+            .put("accept", "text/html")
+            .put("acceptLanguage", "en-US");
+        request.putArray("fetchHeaders");
+        String payload = OBJECT_MAPPER.writeValueAsString(request);
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + "/run-async"))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")

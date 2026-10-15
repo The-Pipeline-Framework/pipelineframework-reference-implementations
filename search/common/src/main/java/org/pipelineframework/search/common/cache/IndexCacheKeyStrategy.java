@@ -7,6 +7,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import io.quarkus.arc.Unremovable;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.EmbeddedChunk;
 import org.pipelineframework.search.common.domain.IndexAck;
 import org.pipelineframework.search.common.domain.TokenBatch;
@@ -37,6 +38,7 @@ public class IndexCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     String docId;
     Integer batchIndex = null;
     String tokensHash;
@@ -128,7 +130,8 @@ public class IndexCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public boolean supportsTarget(Class<?> targetType) {
-    return targetType == IndexAck.class || targetType == IndexAckDto.class;
+    return targetType == IndexAck.class || targetType == IndexAckDto.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "IndexAck");
   }
 
   /**

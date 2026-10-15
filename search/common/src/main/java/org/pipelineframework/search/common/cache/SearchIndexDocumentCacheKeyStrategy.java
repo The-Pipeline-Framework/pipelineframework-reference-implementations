@@ -7,6 +7,7 @@ import io.quarkus.arc.Unremovable;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.EmbeddedChunk;
 import org.pipelineframework.search.common.domain.SearchIndexDocument;
 import org.pipelineframework.search.common.dto.EmbeddedChunkDto;
@@ -18,6 +19,7 @@ public class SearchIndexDocumentCacheKeyStrategy implements CacheKeyStrategy {
 
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     return identity(item).map(identity -> SearchIndexDocument.class.getName()
         + ":doc=" + identity.docId()
         + ":batch=" + identity.batchIndex()
@@ -34,7 +36,8 @@ public class SearchIndexDocumentCacheKeyStrategy implements CacheKeyStrategy {
 
   @Override
   public boolean supportsTarget(Class<?> targetType) {
-    return targetType == SearchIndexDocument.class || targetType == SearchIndexDocumentDto.class;
+    return targetType == SearchIndexDocument.class || targetType == SearchIndexDocumentDto.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "SearchIndexDocument");
   }
 
   private Optional<Identity> identity(Object item) {

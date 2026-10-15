@@ -7,6 +7,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import io.quarkus.arc.Unremovable;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.EmbeddedChunk;
 import org.pipelineframework.search.common.domain.TokenBatch;
 import org.pipelineframework.search.common.dto.EmbeddedChunkDto;
@@ -18,6 +19,7 @@ public class EmbedCacheKeyStrategy implements CacheKeyStrategy {
 
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     String docId;
     Integer batchIndex;
     String tokensHash;
@@ -65,7 +67,8 @@ public class EmbedCacheKeyStrategy implements CacheKeyStrategy {
 
   @Override
   public boolean supportsTarget(Class<?> targetType) {
-    return targetType == EmbeddedChunk.class || targetType == EmbeddedChunkDto.class;
+    return targetType == EmbeddedChunk.class || targetType == EmbeddedChunkDto.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "EmbeddedChunk");
   }
 
   private String resolveVectorVersion() {

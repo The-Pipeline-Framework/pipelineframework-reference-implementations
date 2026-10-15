@@ -11,7 +11,7 @@ import org.pipelineframework.search.grpc.PipelineTypes;
 class CrawlRequestMapperTest {
 
   @Test
-  void mapsFetchHeadersThroughGrpcMapAccessors() {
+  void mapsFetchHeadersThroughGrpcRecords() {
     UUID docId = UUID.randomUUID();
     CrawlRequestDto dto = CrawlRequestDto.builder()
         .docId(docId)
@@ -26,7 +26,8 @@ class CrawlRequestMapperTest {
     PipelineTypes.CrawlRequest grpc = CrawlRequestMapper.INSTANCE.toGrpc(dto);
     CrawlRequestDto roundTripped = CrawlRequestMapper.INSTANCE.fromGrpc(grpc);
 
-    assertEquals("trace-1", grpc.getFetchHeadersMap().get("X-Trace"));
+    assertEquals("X-Trace", grpc.getFetchHeaders(0).getName());
+    assertEquals("trace-1", grpc.getFetchHeaders(0).getValue());
     assertEquals(docId, roundTripped.getDocId());
     assertEquals("trace-1", roundTripped.getFetchHeaders().get("X-Trace"));
   }

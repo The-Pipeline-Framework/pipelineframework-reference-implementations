@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import io.quarkus.arc.Unremovable;
 import org.pipelineframework.cache.CacheKeyStrategy;
 import org.pipelineframework.context.PipelineContext;
+import org.pipelineframework.search.common.canonical.SearchTransportRecordAdapter;
 import org.pipelineframework.search.common.domain.ParsedDocument;
 import org.pipelineframework.search.common.domain.TokenBatch;
 import org.pipelineframework.search.common.dto.ParsedDocumentDto;
@@ -29,6 +30,7 @@ public class TokenizeCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public Optional<String> resolveKey(Object item, PipelineContext context) {
+    item = SearchTransportRecordAdapter.toEntity(item).orElse(item);
     String contentHash;
     Integer batchIndex = null;
     if (item instanceof TokenBatch batch) {
@@ -80,7 +82,8 @@ public class TokenizeCacheKeyStrategy implements CacheKeyStrategy {
    */
   @Override
   public boolean supportsTarget(Class<?> targetType) {
-    return targetType == TokenBatch.class || targetType == TokenBatchDto.class;
+    return targetType == TokenBatch.class || targetType == TokenBatchDto.class
+        || SearchTransportRecordAdapter.matchesTarget(targetType, "TokenBatch");
   }
 
   /**
