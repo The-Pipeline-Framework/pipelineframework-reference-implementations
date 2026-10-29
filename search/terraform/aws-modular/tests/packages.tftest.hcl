@@ -23,12 +23,12 @@ mock_provider "aws" {
 variables {
   aws_region                = "us-east-2"
   name_prefix               = "search-test"
-  orchestrator_zip_path     = "tests/package.fixture"
-  crawl_source_zip_path     = "tests/package.fixture"
-  parse_document_zip_path   = "tests/package.fixture"
-  tokenize_content_zip_path = "tests/package.fixture"
-  embed_content_zip_path    = "tests/package.fixture"
-  index_document_zip_path   = "tests/package.fixture"
+  orchestrator_zip_path     = "tests/fixtures/orchestrator.fixture"
+  crawl_source_zip_path     = "tests/fixtures/crawl-source.fixture"
+  parse_document_zip_path   = "tests/fixtures/parse-document.fixture"
+  tokenize_content_zip_path = "tests/fixtures/tokenize-content.fixture"
+  embed_content_zip_path    = "tests/fixtures/embed-content.fixture"
+  index_document_zip_path   = "tests/fixtures/index-document.fixture"
 }
 
 run "stage_all_packages_and_preserve_code_identity" {
@@ -38,8 +38,7 @@ run "stage_all_packages_and_preserve_code_identity" {
     condition = alltrue([for name, function in aws_lambda_function.step :
       function.filename == null &&
       function.s3_bucket == aws_s3_bucket.lambda_code.id &&
-      function.s3_key == aws_s3_object.lambda_code[name].key &&
-      function.source_code_hash == filebase64sha256(local.step_functions[name].zip_path)
+      function.s3_key == aws_s3_object.lambda_code[name].key
     ])
     error_message = "Every step must load the exact hashed package through S3, not inline."
   }
@@ -48,19 +47,29 @@ run "stage_all_packages_and_preserve_code_identity" {
     condition = (
       aws_lambda_function.orchestrator.filename == null &&
       aws_lambda_function.orchestrator.s3_bucket == aws_s3_bucket.lambda_code.id &&
-      aws_lambda_function.orchestrator.s3_key == aws_s3_object.lambda_code["orchestrator-svc"].key &&
-      aws_lambda_function.orchestrator.source_code_hash == filebase64sha256(local.orchestrator_zip_path)
+      aws_lambda_function.orchestrator.s3_key == aws_s3_object.lambda_code["orchestrator-svc"].key
     )
     error_message = "The orchestrator must use the same S3-backed package path as steps."
   }
 
   assert {
+    # This oracle is independent of both the input assignments and production
+    # locals: swapping package variables must not change the expected routing.
     condition = length(aws_s3_object.lambda_code) == 6 && alltrue([
-      for name, object in aws_s3_object.lambda_code :
-      object.key == "${name}/${filesha256(local.lambda_packages[name].zip_path)}/function.zip" &&
-      object.source_hash == filesha256(local.lambda_packages[name].zip_path)
+      for name, fixture in {
+        crawl-source-svc     = "tests/fixtures/crawl-source.fixture"
+        parse-document-svc   = "tests/fixtures/parse-document.fixture"
+        tokenize-content-svc = "tests/fixtures/tokenize-content.fixture"
+        embed-content-svc    = "tests/fixtures/embed-content.fixture"
+        index-document-svc   = "tests/fixtures/index-document.fixture"
+        orchestrator-svc     = "tests/fixtures/orchestrator.fixture"
+      } :
+      aws_s3_object.lambda_code[name].source == "${path.root}/${fixture}" &&
+      aws_s3_object.lambda_code[name].key == "${name}/${filesha256("${path.root}/${fixture}")}/function.zip" &&
+      aws_s3_object.lambda_code[name].source_hash == filesha256("${path.root}/${fixture}") &&
+      (name == "orchestrator-svc" ? aws_lambda_function.orchestrator.source_code_hash : aws_lambda_function.step[name].source_code_hash) == filebase64sha256("${path.root}/${fixture}")
     ])
-    error_message = "All six packages must have content-addressed keys and matching source hashes."
+    error_message = "Each service must stage its independently expected fixture with matching object and Lambda hashes."
   }
 
   assert {
