@@ -79,7 +79,10 @@ jobs:
       - name: Terraform Init
         id: terraform_init
         working-directory: search/terraform/aws-modular
-        run: terraform init
+        run: |
+          terraform init
+          terraform validate
+          terraform test -no-color
 
       - name: Terraform Apply
         id: terraform_apply
