@@ -88,6 +88,8 @@ run "stage_all_packages_and_preserve_code_identity" {
       aws_lambda_function.queue_recovery.s3_key == aws_lambda_function.queue_worker.s3_key &&
       one(aws_lambda_function.queue_recovery.environment).variables["QUARKUS_LAMBDA_HANDLER"] == "aws-durable-due-work" &&
       one(aws_lambda_function.queue_recovery.environment).variables["PIPELINE_ORCHESTRATOR_PROCESS_LOOPS_DISABLED"] == "true" &&
+      one(aws_lambda_function.queue_recovery.environment).variables["PIPELINE_ORCHESTRATOR_DYNAMO_AWAIT_INTERACTION_TABLE"] == aws_dynamodb_table.recovery_await.name &&
+      toset(aws_dynamodb_table.recovery_await.global_secondary_index[*].name) == toset(["await-interaction-pending-by-deadline", "await-interaction-continuation-work"]) &&
       aws_cloudwatch_metric_alarm.dead_letter.dimensions["QueueName"] == aws_sqs_queue.dead_letter.name
     )
     error_message = "Search must sweep due work from its dedicated trigger and alarm on its work DLQ."
