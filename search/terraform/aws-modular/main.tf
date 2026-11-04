@@ -36,6 +36,9 @@ locals {
   queue_environment = merge(local.base_environment, {
     PIPELINE_CACHE_PROVIDER                                     = "memory"
     PIPELINE_ORCHESTRATOR_MODE                                  = "QUEUE_ASYNC"
+    PIPELINE_ORCHESTRATOR_RELEASE_VERSION                       = local.release_version
+    PIPELINE_ORCHESTRATOR_RELEASES_REGISTRY_PROVIDER            = "dynamo"
+    PIPELINE_ORCHESTRATOR_DYNAMO_RELEASE_TABLE                  = aws_dynamodb_table.queue["release"].name
     PIPELINE_ORCHESTRATOR_IDEMPOTENCY_POLICY                    = "CLIENT_KEY_REQUIRED"
     PIPELINE_ORCHESTRATOR_PROCESS_LOOPS_DISABLED                = "true"
     PIPELINE_ORCHESTRATOR_SQS_LOCAL_LOOPBACK                    = "false"
@@ -56,10 +59,13 @@ locals {
     QUARKUS_REST_CLIENT_PROCESS_SUMMARIZE_INDEX_WRITES_URL      = aws_lambda_function_url.step["index-document-svc"].function_url
   })
 
+  release_version = "sha256:${sha256(jsonencode({ for name, package in local.lambda_packages : name => filesha256(package.zip_path) }))}"
+
   orchestrator_zip_path = "${path.root}/${var.orchestrator_zip_path}"
 
   lambda_packages = merge(local.step_functions, {
     orchestrator-svc = { zip_path = local.orchestrator_zip_path }
+    function-worker  = { zip_path = "${path.root}/${var.worker_zip_path}" }
   })
 }
 

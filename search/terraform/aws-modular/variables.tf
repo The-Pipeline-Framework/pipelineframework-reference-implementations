@@ -43,3 +43,9 @@ variable "index_document_zip_path" {
   type        = string
   default     = "../../index-document-svc/target/function.zip"
 }
+
+variable "worker_zip_path" {
+  description = "Path to the native SQS worker Lambda ZIP."
+  type        = string
+  default     = "../../function-worker/target/function.zip"
+}

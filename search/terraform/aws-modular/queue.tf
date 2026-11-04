@@ -4,6 +4,7 @@ locals {
     execution-key     = ["tenant_execution_key"]
     execution-payload = ["payload_id", "payload_part"]
     command-effect    = ["command_key", "revision"]
+    release           = ["registry_key", "registry_sort"]
   }
 }
 
@@ -70,24 +71,25 @@ resource "aws_iam_role_policy" "queue_access" {
 resource "aws_lambda_function" "queue_worker" {
   function_name    = "${var.name_prefix}-queue-worker"
   role             = aws_iam_role.queue_exec.arn
-  s3_bucket        = aws_s3_object.lambda_code["orchestrator-svc"].bucket
-  s3_key           = aws_s3_object.lambda_code["orchestrator-svc"].key
-  source_code_hash = filebase64sha256(local.orchestrator_zip_path)
+  s3_bucket        = aws_s3_object.lambda_code["function-worker"].bucket
+  s3_key           = aws_s3_object.lambda_code["function-worker"].key
+  source_code_hash = filebase64sha256(local.lambda_packages["function-worker"].zip_path)
   runtime          = "java21"
-  handler          = "org.pipelineframework.search.orchestrator.service.SearchQueueWorkerHandler::handleRequest"
+  handler          = "io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest"
   architectures    = ["x86_64"]
   memory_size      = 1536
   timeout          = 120
 
   environment {
-    variables = local.queue_environment
+    variables = merge(local.queue_environment, { QUARKUS_LAMBDA_HANDLER = "aws-durable-work-item" })
   }
 
   depends_on = [aws_iam_role_policy_attachment.queue_logs, aws_iam_role_policy.queue_access]
 }
 
 resource "aws_lambda_event_source_mapping" "work" {
-  event_source_arn = aws_sqs_queue.work.arn
-  function_name    = aws_lambda_function.queue_worker.arn
-  batch_size       = 1
+  event_source_arn        = aws_sqs_queue.work.arn
+  function_name           = aws_lambda_function.queue_worker.arn
+  batch_size              = 1
+  function_response_types = ["ReportBatchItemFailures"]
 }

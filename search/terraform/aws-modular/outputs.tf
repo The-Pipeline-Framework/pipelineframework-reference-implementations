@@ -27,3 +27,14 @@ output "index_document_function_url" {
   description = "Public Function URL for index-document-svc."
   value       = aws_lambda_function_url.step["index-document-svc"].function_url
 }
+
+output "search_release" {
+  value = {
+    version = local.release_version
+    table   = aws_dynamodb_table.queue["release"].name
+    artifacts = { for name, object in aws_s3_object.lambda_code : name => {
+      uri    = "s3://${object.bucket}/${object.key}"
+      digest = "sha256:${object.source_hash}"
+    } }
+  }
+}

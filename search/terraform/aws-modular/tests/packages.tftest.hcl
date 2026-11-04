@@ -29,6 +29,7 @@ mock_provider "aws" {
 variables {
   aws_region                = "us-east-2"
   name_prefix               = "search-test"
+  worker_zip_path           = "tests/fixtures/worker.fixture"
   orchestrator_zip_path     = "tests/fixtures/orchestrator.fixture"
   crawl_source_zip_path     = "tests/fixtures/crawl-source.fixture"
   parse_document_zip_path   = "tests/fixtures/parse-document.fixture"
@@ -59,16 +60,17 @@ run "stage_all_packages_and_preserve_code_identity" {
     condition = (
       one(aws_lambda_function.orchestrator.environment).variables["PIPELINE_ORCHESTRATOR_MODE"] == "QUEUE_ASYNC" &&
       one(aws_lambda_function.orchestrator.environment).variables["PIPELINE_ORCHESTRATOR_IDEMPOTENCY_POLICY"] == "CLIENT_KEY_REQUIRED" &&
-      one(aws_lambda_function.queue_worker.environment).variables == one(aws_lambda_function.orchestrator.environment).variables &&
+      one(aws_lambda_function.queue_worker.environment).variables == tomap(merge(one(aws_lambda_function.orchestrator.environment).variables, { QUARKUS_LAMBDA_HANDLER = "aws-durable-work-item" })) &&
       aws_lambda_event_source_mapping.work.event_source_arn == aws_sqs_queue.work.arn &&
       aws_lambda_event_source_mapping.work.function_name == aws_lambda_function.queue_worker.arn &&
       aws_lambda_event_source_mapping.work.batch_size == 1 &&
       one(aws_lambda_function.orchestrator.environment).variables["PIPELINE_ORCHESTRATOR_SQS_LOCAL_LOOPBACK"] == "false" &&
       aws_dynamodb_table.queue["command-effect"].range_key == "revision" &&
       one([for key in aws_dynamodb_table.queue["command-effect"].attribute : key.type if key.name == "revision"]) == "N" &&
-      aws_lambda_function.queue_worker.s3_key == aws_lambda_function.orchestrator.s3_key
+      aws_lambda_function.queue_worker.s3_key == aws_s3_object.lambda_code["function-worker"].key &&
+      aws_lambda_function.queue_worker.s3_key != aws_lambda_function.orchestrator.s3_key
     )
-    error_message = "Search HTTP submission and SQS execution must share the package and queue state."
+    error_message = "Search HTTP submission and SQS execution must use separate packages and share the release and queue state."
   }
 
   assert {
@@ -92,19 +94,20 @@ run "stage_all_packages_and_preserve_code_identity" {
   assert {
     # This oracle is independent of both the input assignments and production
     # locals: swapping package variables must not change the expected routing.
-    condition = length(aws_s3_object.lambda_code) == 6 && alltrue([
+    condition = length(aws_s3_object.lambda_code) == 7 && alltrue([
       for name, fixture in {
         crawl-source-svc     = "tests/fixtures/crawl-source.fixture"
         parse-document-svc   = "tests/fixtures/parse-document.fixture"
         tokenize-content-svc = "tests/fixtures/tokenize-content.fixture"
         embed-content-svc    = "tests/fixtures/embed-content.fixture"
         index-document-svc   = "tests/fixtures/index-document.fixture"
+        function-worker      = "tests/fixtures/worker.fixture"
         orchestrator-svc     = "tests/fixtures/orchestrator.fixture"
       } :
       aws_s3_object.lambda_code[name].source == "${path.root}/${fixture}" &&
       aws_s3_object.lambda_code[name].key == "${name}/${filesha256("${path.root}/${fixture}")}/function.zip" &&
       aws_s3_object.lambda_code[name].source_hash == filesha256("${path.root}/${fixture}") &&
-      (name == "orchestrator-svc" ? aws_lambda_function.orchestrator.source_code_hash : aws_lambda_function.step[name].source_code_hash) == filebase64sha256("${path.root}/${fixture}")
+      (name == "orchestrator-svc" ? aws_lambda_function.orchestrator.source_code_hash : name == "function-worker" ? aws_lambda_function.queue_worker.source_code_hash : aws_lambda_function.step[name].source_code_hash) == filebase64sha256("${path.root}/${fixture}")
     ])
     error_message = "Each service must stage its independently expected fixture with matching object and Lambda hashes."
   }

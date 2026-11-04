@@ -243,9 +243,12 @@ This build uses:
 
 Terraform for the disposable AWS topology lives under `terraform/aws-modular`. Submit with
 `POST /pipeline/run-async` and poll `/pipeline/executions/{executionId}` and its
-`/result` endpoint using the same tenant header. The HTTP Lambda and an SQS-triggered
-worker share DynamoDB execution and Command effect state. The worker runs the Search
-Command in queue execution context and calls the five step Lambdas over REST.
+`/result` endpoint using the same tenant header. The HTTP and native SQS worker ZIPs are built separately from the same compiled contract.
+After Terraform apply, run `bash terraform/aws-modular/register-release.sh` with Java 21
+and AWS deployment credentials. It validates the deployed ZIP digests and activates their
+immutable release for the `search-aws-e2e` tenant in the shared DynamoDB registry.
+The worker uses TPF's published SQS handler to run the Command in queue execution context
+and call the five step Lambdas over REST.
 
 ### Historical Single-Lambda Smoke Boundary
 
