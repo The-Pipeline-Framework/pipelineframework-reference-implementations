@@ -251,6 +251,17 @@ immutable release for the `search-aws-e2e` tenant in the shared DynamoDB registr
 The worker uses TPF's published SQS handler to run the Command in queue execution context
 and call the five step Lambdas over REST.
 
+The owner’s reusable `.github/workflows/system-test-search-aws.yml` runs the AWS lane
+against pinned source and hydrated Maven inputs from the full train. It owns package
+checks, release activation, test evidence, and state retention for cleanup. The caller
+supplies `AWS_ROLE_ARN` and the AWS region setting. The existing Search CI role trusts
+coordinator `main`; build and test jobs have no AWS credentials.
+
+The role needs the supplemental policies in `cloud/iam/`: apply
+`search-code-bucket-policy.json` as `TPFSearchAwsCodeBucketLifecycle` and
+`search-queue-policy.json` as `TPFSearchAwsQueueLifecycle`. Deployment and cleanup
+sessions further narrow that access to the run’s disposable resources.
+
 ### Historical Single-Lambda Smoke Boundary
 
 `./build-lambda.sh` still exists as a local wiring smoke path for the orchestrator module and the generated direct Lambda handler path.
