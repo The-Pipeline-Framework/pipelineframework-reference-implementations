@@ -7,10 +7,11 @@ import zipfile
 
 root = Path(__file__).resolve().parent
 contract = "META-INF/pipeline/pipeline-contract.json"
-adapters = {
+handlers = {
     "org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class",
     "org/pipelineframework/aws/durable/AwsDurableDueWorkHandler.class",
 }
+worker_entries = handlers | {"org/pipelineframework/aws/durable/AwsDurableSqsBatchAdapter.class"}
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--ingress", type=Path, default=root / "orchestrator-svc/target/function.zip")
@@ -21,8 +22,11 @@ with (zipfile.ZipFile(args.ingress) as ingress,
       zipfile.ZipFile(args.worker) as worker):
     ingress_files = set(ingress.namelist())
     worker_files = set(worker.namelist())
-    if adapters & ingress_files or not adapters <= worker_files:
-        raise SystemExit("TPF's SQS entry points must be present only in the native worker ZIP")
+    if handlers & ingress_files:
+        raise SystemExit("TPF's SQS handlers must be absent from the HTTP ingress ZIP")
+    missing_worker_entries = worker_entries - worker_files
+    if missing_worker_entries:
+        raise SystemExit(f"Native worker ZIP is missing TPF SQS classes: {sorted(missing_worker_entries)}")
     if not any("quarkus-amazon-lambda-http-" in name for name in ingress_files):
         raise SystemExit("The ingress ZIP must include the Quarkus Lambda HTTP adapter")
     if any("quarkus-amazon-lambda-http-" in name for name in worker_files):

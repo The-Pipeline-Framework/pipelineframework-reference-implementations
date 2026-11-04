@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {readFile, writeFile} from 'node:fs/promises';
+import {readFile, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
 import {parseArgs} from 'node:util';
@@ -64,6 +64,10 @@ const commandArgs = values.mode === 'build'
   : [...args, '-f', 'search/pom.xml', '-pl', 'orchestrator-svc', '-am',
     '-DskipUnitTests=true', '-Dfailsafe.failIfNoSpecifiedTests=false',
     '-Dquarkus.container-image.build=false', '-Dit.test=AwsLambdaModularEndToEndIT', 'verify'];
+const reports = join(values.source, 'search/orchestrator-svc/target/failsafe-reports');
+if (values.mode === 'test') {
+  await rm(reports, {recursive: true, force: true});
+}
 const child = spawn(command, commandArgs, {cwd: values.source, stdio: 'inherit', shell: false,
   env: {...process.env, MAVEN_ARGS: args.join(' ')}});
 process.exitCode = await new Promise((resolve, reject) => {
@@ -71,7 +75,7 @@ process.exitCode = await new Promise((resolve, reject) => {
   child.once('exit', (code, signal) => signal ? reject(new Error(`cloud suite terminated by ${signal}`)) : resolve(code ?? 1));
 });
 if (values.mode === 'test' && process.exitCode === 0) {
-  const report = await readFile(join(values.source, 'search/orchestrator-svc/target/failsafe-reports',
+  const report = await readFile(join(reports,
     'TEST-org.pipelineframework.search.orchestrator.service.AwsLambdaModularEndToEndIT.xml'), 'utf8');
   const suite = report.match(/<testsuite\b[^>]*>/)?.[0] ?? '';
   const count = (attribute) => Number(suite.match(new RegExp(`\\b${attribute}="([0-9]+)"`))?.[1] ?? NaN);
