@@ -83,7 +83,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
@@ -134,7 +134,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
           role-session-name: tpf-cloud-${{ github.run_id }}-${{ github.run_attempt }}
-          role-duration-seconds: 1800
+          role-duration-seconds: 2700
           inline-session-policy: >-
             {"Version":"2012-10-17","Statement":[
               {"Effect":"Allow","Action":"lambda:*","Resource":"arn:aws:lambda:*:*:function:${{ steps.identity.outputs.name_prefix }}-*"},
@@ -162,6 +162,7 @@ jobs:
           terraform test -no-color
       - name: Deploy exact build and record Function URL
         id: apply
+        timeout-minutes: 15
         working-directory: references/search/terraform/aws-modular
         env:
           TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-2' }}
@@ -176,6 +177,7 @@ jobs:
           echo "url=$(terraform output -raw orchestrator_function_url)" >> "$GITHUB_OUTPUT"
       - name: Retain state for independent cleanup, including partial apply failure
         id: retain-state
+        timeout-minutes: 5
         if: always() && steps.init.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -187,6 +189,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
       - name: Destroy using local state if retention failed
+        timeout-minutes: 15
         if: always() && steps.init.outcome == 'success' && steps.retain-state.outcome != 'success'
         working-directory: references/search/terraform/aws-modular
         env:
