@@ -12,6 +12,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_lambda_function_url" {
+    defaults = {
+      function_url = "https://other-step.lambda-url.us-east-2.on.aws/"
+    }
+  }
+
   mock_resource "aws_s3_bucket" {
     defaults = {
       id     = "search-test-code-staging"
@@ -33,6 +39,37 @@ variables {
 
 run "stage_all_packages_and_preserve_code_identity" {
   command = apply
+
+  override_resource {
+    target = aws_lambda_function_url.step["index-document-svc"]
+    values = {
+      function_url = "https://index-document.lambda-url.us-east-2.on.aws/"
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      for client in ["BUILD_SEARCH_INDEX_DOCUMENT", "SUMMARIZE_INDEX_WRITES"] :
+      lookup(one(aws_lambda_function.orchestrator.environment).variables, "QUARKUS_REST_CLIENT_PROCESS_${client}_URL", "") == aws_lambda_function_url.step["index-document-svc"].function_url
+    ])
+    error_message = "Both generated index-document REST clients must use the index-document Lambda Function URL."
+  }
+
+  assert {
+    condition = (
+      one(aws_lambda_function.orchestrator.environment).variables["PIPELINE_ORCHESTRATOR_MODE"] == "QUEUE_ASYNC" &&
+      one(aws_lambda_function.orchestrator.environment).variables["PIPELINE_ORCHESTRATOR_IDEMPOTENCY_POLICY"] == "CLIENT_KEY_REQUIRED" &&
+      one(aws_lambda_function.queue_worker.environment).variables == one(aws_lambda_function.orchestrator.environment).variables &&
+      aws_lambda_event_source_mapping.work.event_source_arn == aws_sqs_queue.work.arn &&
+      aws_lambda_event_source_mapping.work.function_name == aws_lambda_function.queue_worker.arn &&
+      aws_lambda_event_source_mapping.work.batch_size == 1 &&
+      one(aws_lambda_function.orchestrator.environment).variables["PIPELINE_ORCHESTRATOR_SQS_LOCAL_LOOPBACK"] == "false" &&
+      aws_dynamodb_table.queue["command-effect"].range_key == "revision" &&
+      one([for key in aws_dynamodb_table.queue["command-effect"].attribute : key.type if key.name == "revision"]) == "N" &&
+      aws_lambda_function.queue_worker.s3_key == aws_lambda_function.orchestrator.s3_key
+    )
+    error_message = "Search HTTP submission and SQS execution must share the package and queue state."
+  }
 
   assert {
     condition = alltrue([for name, function in aws_lambda_function.step :

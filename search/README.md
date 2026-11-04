@@ -241,7 +241,11 @@ This build uses:
 - `config/pipeline.modular-lambda.yaml` for the dedicated aspect-free AWS topology
 - `quarkus-amazon-lambda-http` for the Lambda HTTP bridge path
 
-Terraform for the disposable AWS topology lives under `terraform/aws-modular`.
+Terraform for the disposable AWS topology lives under `terraform/aws-modular`. Submit with
+`POST /pipeline/run-async` and poll `/pipeline/executions/{executionId}` and its
+`/result` endpoint using the same tenant header. The HTTP Lambda and an SQS-triggered
+worker share DynamoDB execution and Command effect state. The worker runs the Search
+Command in queue execution context and calls the five step Lambdas over REST.
 
 ### Historical Single-Lambda Smoke Boundary
 

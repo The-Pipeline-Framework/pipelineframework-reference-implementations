@@ -38,13 +38,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * End-to-end integration tests for the modular Search Pipeline deployed to AWS Lambda.
  *
  * This test validates:
- * - HTTP invocation against the orchestrator Function URL
- * - Pipeline execution across the 5-Lambda modular Search topology
+ * - HTTP submission and result polling through the orchestrator Function URL
+ * - SQS-backed execution across the modular Search topology
  * - Cardinality handling (ONE_TO_ONE, ONE_TO_MANY, MANY_TO_ONE)
  * - Response serialization/deserialization across the Lambda HTTP bridge
  *
  * Prerequisites:
- * - The 5-module Search modular topology must already be deployed
+ * - The queue-backed Search modular topology must already be deployed
  * - AWS_LAMBDA_ORCHESTRATOR_URL env var or aws.lambda.orchestrator.url system property must be set
  */
 class AwsLambdaModularEndToEndIT {
@@ -144,22 +144,44 @@ class AwsLambdaModularEndToEndIT {
     }
 
     private JsonNode invokePipeline(String requestBody, Duration timeout) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(orchestratorUrl + "/pipeline/run"))
-            .timeout(timeout)
+        String tenant = "search-aws-e2e";
+        long deadline = System.nanoTime() + timeout.toNanos();
+        HttpRequest submission = HttpRequest.newBuilder(URI.create(orchestratorUrl + "/pipeline/run-async"))
+            .timeout(Duration.ofSeconds(20))
+            .header("x-tenant-id", tenant)
+            .header("Idempotency-Key", UUID.randomUUID().toString())
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
             .build();
+        HttpResponse<String> accepted = httpClient.send(submission, HttpResponse.BodyHandlers.ofString());
+        assertTrue(accepted.statusCode() == 200 || accepted.statusCode() == 202, accepted.body());
+        String executionId = OBJECT_MAPPER.readTree(accepted.body()).path("executionId").asText();
+        assertTrue(!executionId.isBlank(), "Submission must return an execution ID");
+        String executionUrl = orchestratorUrl + "/pipeline/executions/" + executionId;
+        JsonNode status = OBJECT_MAPPER.createObjectNode();
+        while (System.nanoTime() < deadline) {
+            status = getExecutionJson(executionUrl, tenant);
+            switch (status.path("status").asText()) {
+                case "SUCCEEDED":
+                    return getExecutionJson(executionUrl + "/result", tenant);
+                case "FAILED", "DLQ", "CANCELLED", "REMOTE_OUTCOME_UNKNOWN":
+                    fail("Search execution " + executionId + " ended unsuccessfully: " + status);
+                    break;
+                default:
+                    Thread.sleep(500);
+            }
+        }
+        return fail("Search execution " + executionId + " did not finish: " + status);
+    }
 
+    private JsonNode getExecutionJson(String url, String tenant) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+            .timeout(Duration.ofSeconds(15))
+            .header("x-tenant-id", tenant)
+            .GET()
+            .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        String bodyPreview = response.body().length() > 200
-            ? response.body().substring(0, 200) + "..."
-            : response.body();
-
-        LOG.infof("AWS modular pipeline response status: %d", response.statusCode());
-        LOG.infof("AWS modular pipeline response body (truncated): %s", bodyPreview);
-
-        assertEquals(200, response.statusCode(), "Pipeline execution should return HTTP 200");
+        assertEquals(200, response.statusCode(), response.body());
         return OBJECT_MAPPER.readTree(response.body());
     }
 

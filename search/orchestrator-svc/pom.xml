@@ -46,6 +46,10 @@
             <groupId>jakarta.resource</groupId>
             <artifactId>jakarta.resource-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-lambda-java-core</artifactId>
+        </dependency>
         <!-- Quarkus gRPC -->
         <dependency>
             <groupId>io.quarkus</groupId>
