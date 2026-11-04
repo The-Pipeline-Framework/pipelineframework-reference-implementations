@@ -84,14 +84,13 @@ jobs:
           terraform validate
           terraform test -no-color
 
-      - name: Terraform Apply
+      - name: Deploy and activate the Search release
         id: terraform_apply
         working-directory: search/terraform/aws-modular
         env:
           TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-        run: |
-          terraform apply -auto-approve \
-            -var="name_prefix=${{ inputs.name_prefix }}-${{ github.run_id }}"
+          TF_VAR_name_prefix: ${{ inputs.name_prefix }}-${{ github.run_id }}
+        run: bash deploy.sh
 
       - name: Get orchestrator Function URL
         id: orchestrator_url

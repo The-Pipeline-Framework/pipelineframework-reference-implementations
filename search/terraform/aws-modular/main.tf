@@ -33,10 +33,39 @@ locals {
     }
   }
 
+  queue_environment = merge(local.base_environment, {
+    PIPELINE_CACHE_PROVIDER                                     = "memory"
+    PIPELINE_ORCHESTRATOR_MODE                                  = "QUEUE_ASYNC"
+    PIPELINE_ORCHESTRATOR_RELEASE_VERSION                       = local.release_version
+    PIPELINE_ORCHESTRATOR_RELEASES_REGISTRY_PROVIDER            = "dynamo"
+    PIPELINE_ORCHESTRATOR_DYNAMO_RELEASE_TABLE                  = aws_dynamodb_table.queue["release"].name
+    PIPELINE_ORCHESTRATOR_IDEMPOTENCY_POLICY                    = "CLIENT_KEY_REQUIRED"
+    PIPELINE_ORCHESTRATOR_PROCESS_LOOPS_DISABLED                = "true"
+    PIPELINE_ORCHESTRATOR_SQS_LOCAL_LOOPBACK                    = "false"
+    PIPELINE_ORCHESTRATOR_LEASE_MS                              = "180000"
+    PIPELINE_ORCHESTRATOR_STATE_PROVIDER                        = "dynamo"
+    PIPELINE_ORCHESTRATOR_DISPATCHER_PROVIDER                   = "sqs"
+    PIPELINE_ORCHESTRATOR_QUEUE_URL                             = aws_sqs_queue.work.url
+    PIPELINE_ORCHESTRATOR_DYNAMO_EXECUTION_TABLE                = aws_dynamodb_table.queue["execution"].name
+    PIPELINE_ORCHESTRATOR_DYNAMO_EXECUTION_KEY_TABLE            = aws_dynamodb_table.queue["execution-key"].name
+    PIPELINE_ORCHESTRATOR_DYNAMO_EXECUTION_PAYLOAD_TABLE        = aws_dynamodb_table.queue["execution-payload"].name
+    PIPELINE_COMMAND_EFFECT_STORE_PROVIDER                      = "dynamo"
+    PIPELINE_COMMAND_EFFECT_STORE_DYNAMO_TABLE                  = aws_dynamodb_table.queue["command-effect"].name
+    QUARKUS_REST_CLIENT_PROCESS_CRAWL_SOURCE_URL                = aws_lambda_function_url.step["crawl-source-svc"].function_url
+    QUARKUS_REST_CLIENT_PROCESS_PARSE_DOCUMENT_URL              = aws_lambda_function_url.step["parse-document-svc"].function_url
+    QUARKUS_REST_CLIENT_PROCESS_TOKENIZE_CONTENT_URL            = aws_lambda_function_url.step["tokenize-content-svc"].function_url
+    QUARKUS_REST_CLIENT_PROCESS_EMBED_CONTENT_URL               = aws_lambda_function_url.step["embed-content-svc"].function_url
+    QUARKUS_REST_CLIENT_PROCESS_BUILD_SEARCH_INDEX_DOCUMENT_URL = aws_lambda_function_url.step["index-document-svc"].function_url
+    QUARKUS_REST_CLIENT_PROCESS_SUMMARIZE_INDEX_WRITES_URL      = aws_lambda_function_url.step["index-document-svc"].function_url
+  })
+
+  release_version = "sha256:${sha256(jsonencode({ for name, package in local.lambda_packages : name => filesha256(package.zip_path) }))}"
+
   orchestrator_zip_path = "${path.root}/${var.orchestrator_zip_path}"
 
   lambda_packages = merge(local.step_functions, {
     orchestrator-svc = { zip_path = local.orchestrator_zip_path }
+    function-worker  = { zip_path = "${path.root}/${var.worker_zip_path}" }
   })
 }
 
@@ -140,6 +169,8 @@ resource "aws_lambda_permission" "step_function_url_invoke" {
   function_name            = each.value.function_name
   principal                = "*"
   invoked_via_function_url = true
+
+  depends_on = [aws_lambda_function_url.step]
 }
 
 resource "aws_lambda_permission" "step_function_url_public_access" {
@@ -150,11 +181,13 @@ resource "aws_lambda_permission" "step_function_url_public_access" {
   function_name          = each.value.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+
+  depends_on = [aws_lambda_permission.step_function_url_invoke]
 }
 
 resource "aws_lambda_function" "orchestrator" {
   function_name    = "${var.name_prefix}-orchestrator-svc"
-  role             = aws_iam_role.lambda_exec.arn
+  role             = aws_iam_role.queue_exec.arn
   s3_bucket        = aws_s3_object.lambda_code["orchestrator-svc"].bucket
   s3_key           = aws_s3_object.lambda_code["orchestrator-svc"].key
   source_code_hash = filebase64sha256(local.orchestrator_zip_path)
@@ -165,18 +198,10 @@ resource "aws_lambda_function" "orchestrator" {
   timeout          = 120
 
   environment {
-    variables = merge(local.base_environment, {
-      # The first modular AWS slice keeps cache state in-memory to avoid external infrastructure.
-      PIPELINE_CACHE_PROVIDER                          = "memory"
-      QUARKUS_REST_CLIENT_PROCESS_CRAWL_SOURCE_URL     = aws_lambda_function_url.step["crawl-source-svc"].function_url
-      QUARKUS_REST_CLIENT_PROCESS_PARSE_DOCUMENT_URL   = aws_lambda_function_url.step["parse-document-svc"].function_url
-      QUARKUS_REST_CLIENT_PROCESS_TOKENIZE_CONTENT_URL = aws_lambda_function_url.step["tokenize-content-svc"].function_url
-      QUARKUS_REST_CLIENT_PROCESS_EMBED_CONTENT_URL    = aws_lambda_function_url.step["embed-content-svc"].function_url
-      QUARKUS_REST_CLIENT_PROCESS_INDEX_DOCUMENT_URL   = aws_lambda_function_url.step["index-document-svc"].function_url
-    })
+    variables = local.queue_environment
   }
 
-  depends_on = [aws_iam_role_policy_attachment.basic_execution]
+  depends_on = [aws_iam_role_policy_attachment.queue_logs, aws_iam_role_policy.queue_access]
 }
 
 resource "aws_lambda_function_url" "orchestrator" {
@@ -193,6 +218,8 @@ resource "aws_lambda_permission" "orchestrator_function_url_invoke" {
   function_name            = aws_lambda_function.orchestrator.function_name
   principal                = "*"
   invoked_via_function_url = true
+
+  depends_on = [aws_lambda_function_url.orchestrator]
 }
 
 resource "aws_lambda_permission" "orchestrator_function_url_public_access" {
@@ -201,4 +228,6 @@ resource "aws_lambda_permission" "orchestrator_function_url_public_access" {
   function_name          = aws_lambda_function.orchestrator.function_name
   principal              = "*"
   function_url_auth_type = "NONE"
+
+  depends_on = [aws_lambda_permission.orchestrator_function_url_invoke]
 }

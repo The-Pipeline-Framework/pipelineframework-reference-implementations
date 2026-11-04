@@ -220,7 +220,7 @@ This keeps the lane business-relevant (document-level indexing summary), not jus
 
 ### Modular AWS Lambda Lane
 
-The supported live AWS lane for Search is now the modular 6-Lambda topology:
+The supported live AWS lane for Search is now the modular topology with seven application Lambdas:
 
 - `orchestrator-svc`
 - `crawl-source-svc`
@@ -228,6 +228,12 @@ The supported live AWS lane for Search is now the modular 6-Lambda topology:
 - `tokenize-content-svc`
 - `embed-content-svc`
 - `index-document-svc`
+- `queue-worker` (SQS-triggered execution worker)
+
+A separate `queue-recovery` Lambda runs the TPF due-work sweep every minute via
+an EventBridge rule and a dedicated SQS queue. The sweep uses durable execution
+state to re-dispatch eligible work. The work DLQ retains failed messages for
+diagnosis and raises a CloudWatch alarm when messages become visible.
 
 Build it with:
 
@@ -241,7 +247,26 @@ This build uses:
 - `config/pipeline.modular-lambda.yaml` for the dedicated aspect-free AWS topology
 - `quarkus-amazon-lambda-http` for the Lambda HTTP bridge path
 
-Terraform for the disposable AWS topology lives under `terraform/aws-modular`.
+Terraform for the disposable AWS topology lives under `terraform/aws-modular`. Submit with
+`POST /pipeline/run-async` and poll `/pipeline/executions/{executionId}` and its
+`/result` endpoint using the same tenant header. The HTTP and native SQS worker ZIPs are built separately from the same compiled contract.
+After Terraform init, run `bash terraform/aws-modular/deploy.sh` with Java 21, AWS
+deployment credentials, and the Terraform region and name prefix. It applies the stack,
+validates the deployed ZIP digests, and activates their
+immutable release for the `search-aws-e2e` tenant in the shared DynamoDB registry.
+The worker uses TPF's published SQS handler to run the Command in queue execution context
+and call the five step Lambdas over REST.
+
+The owner’s reusable `.github/workflows/system-test-search-aws.yml` runs the AWS lane
+against pinned source and hydrated Maven inputs from the full train. It owns package
+checks, release activation, test evidence, and state retention for cleanup. The caller
+supplies `AWS_ROLE_ARN` and the AWS region setting. The existing Search CI role trusts
+coordinator `main`; build and test jobs have no AWS credentials.
+
+The role needs the supplemental policies in `cloud/iam/`: apply
+`search-code-bucket-policy.json` as `TPFSearchAwsCodeBucketLifecycle` and
+`search-queue-policy.json` as `TPFSearchAwsQueueLifecycle`. Deployment and cleanup
+sessions further narrow that access to the run’s disposable resources.
 
 ### Historical Single-Lambda Smoke Boundary
 

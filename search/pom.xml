@@ -25,6 +25,7 @@
         <module>persistence-svc</module>
         <module>cache-invalidation-svc</module>
         <module>orchestrator-svc</module>
+        <module>function-worker</module>
     </modules>
 
     <properties>

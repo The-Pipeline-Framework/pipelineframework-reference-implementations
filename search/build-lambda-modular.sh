@@ -19,7 +19,7 @@ PIPELINE_PLATFORM="${PIPELINE_PLATFORM:-FUNCTION}"
 PIPELINE_TRANSPORT="${PIPELINE_TRANSPORT:-REST}"
 PIPELINE_REST_NAMING_STRATEGY="${PIPELINE_REST_NAMING_STRATEGY:-RESOURCEFUL}"
 PIPELINE_CONFIG_PATH="${PIPELINE_CONFIG_PATH:-$SEARCH_DIR/config/pipeline.modular-lambda.yaml}"
-MODULES="${MODULES:-search/common,search/crawl-source-svc,search/parse-document-svc,search/tokenize-content-svc,search/embed-content-svc,search/index-document-svc,search/orchestrator-svc}"
+MODULES="${MODULES:-search/common,search/crawl-source-svc,search/parse-document-svc,search/tokenize-content-svc,search/embed-content-svc,search/index-document-svc,search/orchestrator-svc,search/function-worker}"
 
 "$MVN_BIN" -f "$ROOT_DIR/pom.xml" \
   -pl "$MODULES" \
@@ -33,3 +33,8 @@ MODULES="${MODULES:-search/common,search/crawl-source-svc,search/parse-document-
   -Dpipeline.function.httpBridge.arg="-Apipeline.function.httpBridge=true" \
   -Dquarkus.profile=lambda-modular \
   clean package "$@"
+
+
+if [[ ",$MODULES," == *,search/function-worker,* ]]; then
+  python3 "$SEARCH_DIR/verify-lambda-packages.py"
+fi
