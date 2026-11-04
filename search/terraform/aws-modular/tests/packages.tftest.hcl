@@ -18,6 +18,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_sqs_queue" {
+    defaults = {
+      arn = "arn:aws:sqs:us-east-2:123456789012:search-test-queue"
+    }
+  }
+
   mock_resource "aws_s3_bucket" {
     defaults = {
       id     = "search-test-code-staging"
@@ -74,6 +80,20 @@ run "stage_all_packages_and_preserve_code_identity" {
   }
 
   assert {
+    condition = (
+      aws_cloudwatch_event_rule.recovery.schedule_expression == "rate(1 minute)" &&
+      aws_cloudwatch_event_target.recovery.arn == aws_sqs_queue.recovery.arn &&
+      aws_lambda_event_source_mapping.recovery.event_source_arn == aws_sqs_queue.recovery.arn &&
+      aws_lambda_event_source_mapping.recovery.function_name == aws_lambda_function.queue_recovery.arn &&
+      aws_lambda_function.queue_recovery.s3_key == aws_lambda_function.queue_worker.s3_key &&
+      one(aws_lambda_function.queue_recovery.environment).variables["QUARKUS_LAMBDA_HANDLER"] == "aws-durable-due-work" &&
+      one(aws_lambda_function.queue_recovery.environment).variables["PIPELINE_ORCHESTRATOR_PROCESS_LOOPS_DISABLED"] == "true" &&
+      aws_cloudwatch_metric_alarm.dead_letter.dimensions["QueueName"] == aws_sqs_queue.dead_letter.name
+    )
+    error_message = "Search must sweep due work from its dedicated trigger and alarm on its work DLQ."
+  }
+
+  assert {
     condition = alltrue([for name, function in aws_lambda_function.step :
       function.filename == null &&
       function.s3_bucket == aws_s3_bucket.lambda_code.id &&
@@ -104,6 +124,7 @@ run "stage_all_packages_and_preserve_code_identity" {
         function-worker      = "tests/fixtures/worker.fixture"
         orchestrator-svc     = "tests/fixtures/orchestrator.fixture"
       } :
+      output.search_release.artifacts[name].local_path == abspath("${path.root}/${fixture}") &&
       aws_s3_object.lambda_code[name].source == "${path.root}/${fixture}" &&
       aws_s3_object.lambda_code[name].key == "${name}/${filesha256("${path.root}/${fixture}")}/function.zip" &&
       aws_s3_object.lambda_code[name].source_hash == filesha256("${path.root}/${fixture}") &&

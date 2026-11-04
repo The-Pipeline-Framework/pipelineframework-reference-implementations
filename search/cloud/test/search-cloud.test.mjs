@@ -89,7 +89,7 @@ test('cloud build and test jobs isolate credentials', async () => {
     assert.doesNotMatch(body, /id-token: write|secrets\.|configure-aws-credentials|packages:|statuses:/);
   }
   assert.match(workflow, /cleanup:\n\s+if: always\(\)/);
-  assert.match(workflow, /role\/\$\{\{ steps.identity.outputs.name_prefix \}\}-lambda-exec/);
+  assert.match(workflow, /role\/\$\{\{ steps.identity.outputs.name_prefix \}\}-\*-exec/);
   assert.doesNotMatch(workflow, /cancel-in-progress: true/);
 
 });
@@ -105,7 +105,9 @@ test('cleanup-only reruns retain the original deployment prefix in Terraform and
   const policy = JSON.parse(rendered.match(/inline-session-policy: >-\n\s*(\{[\s\S]*?\n\s*\]\})/)[1]);
   assert.deepEqual([...new Set(policy.Statement.flatMap((statement) => statement.Resource))], [
     'arn:aws:lambda:*:*:function:search-modular-123-1-*',
-    'arn:aws:iam::*:role/search-modular-123-1-lambda-exec',
+    'arn:aws:events:*:*:rule/search-modular-123-1-recovery',
+    'arn:aws:cloudwatch:*:*:alarm:search-modular-123-1-dead-letter',
+    'arn:aws:iam::*:role/search-modular-123-1-*-exec',
     'arn:aws:iam::*:role/search-modular-123-1-queue-exec',
     'arn:aws:sqs:*:*:search-modular-123-1-*',
     'arn:aws:dynamodb:*:*:table/search-modular-123-1-*',
@@ -117,7 +119,7 @@ test('cleanup-only reruns retain the original deployment prefix in Terraform and
   const mapping = policy.Statement.find((statement) => statement.Resource === '*');
   assert.deepEqual(mapping.Action, ['lambda:GetEventSourceMapping', 'lambda:DeleteEventSourceMapping']);
   assert.equal(mapping.Condition.ArnLike['lambda:FunctionArn'],
-    'arn:aws:lambda:*:*:function:search-modular-123-1-queue-worker');
+    'arn:aws:lambda:*:*:function:search-modular-123-1-queue-*');
 });
 
 test('S3 package authority is bounded to the run and cleanup cannot upload new code', async () => {

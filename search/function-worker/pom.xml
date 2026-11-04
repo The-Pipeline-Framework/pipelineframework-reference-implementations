@@ -47,7 +47,7 @@
                                     <artifactId>pipelineframework-aws-durable-coordination-host</artifactId>
                                     <version>${pipelineframework.runtime.version}</version>
                                     <outputDirectory>${project.build.outputDirectory}</outputDirectory>
-                                    <includes>org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class,org/pipelineframework/aws/durable/AwsDurableSqsBatchAdapter.class</includes>
+                                    <includes>org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class,org/pipelineframework/aws/durable/AwsDurableDueWorkHandler.class,org/pipelineframework/aws/durable/AwsDurableSqsBatchAdapter.class</includes>
                                 </artifactItem>
                             </artifactItems>
                         </configuration>

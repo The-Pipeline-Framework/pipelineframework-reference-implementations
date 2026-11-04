@@ -220,7 +220,7 @@ This keeps the lane business-relevant (document-level indexing summary), not jus
 
 ### Modular AWS Lambda Lane
 
-The supported live AWS lane for Search is now the modular 6-Lambda topology:
+The supported live AWS lane for Search is now the modular topology with seven application Lambdas:
 
 - `orchestrator-svc`
 - `crawl-source-svc`
@@ -228,6 +228,12 @@ The supported live AWS lane for Search is now the modular 6-Lambda topology:
 - `tokenize-content-svc`
 - `embed-content-svc`
 - `index-document-svc`
+- `queue-worker` (SQS-triggered execution worker)
+
+A separate `queue-recovery` Lambda runs the TPF due-work sweep every minute via
+an EventBridge rule and a dedicated SQS queue. The sweep uses durable execution
+state to re-dispatch eligible work. The work DLQ retains failed messages for
+diagnosis and raises a CloudWatch alarm when messages become visible.
 
 Build it with:
 

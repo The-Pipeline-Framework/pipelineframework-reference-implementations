@@ -33,8 +33,9 @@ output "search_release" {
     version = local.release_version
     table   = aws_dynamodb_table.queue["release"].name
     artifacts = { for name, object in aws_s3_object.lambda_code : name => {
-      uri    = "s3://${object.bucket}/${object.key}"
-      digest = "sha256:${object.source_hash}"
+      local_path = abspath(local.lambda_packages[name].zip_path)
+      uri        = "s3://${object.bucket}/${object.key}"
+      digest     = "sha256:${object.source_hash}"
     } }
   }
 }

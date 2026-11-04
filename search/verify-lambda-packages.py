@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
 """Enforce Search's HTTP/native packaging boundary before deployment."""
+import argparse
 from io import BytesIO
 from pathlib import Path
 import zipfile
 
 root = Path(__file__).resolve().parent
 contract = "META-INF/pipeline/pipeline-contract.json"
-adapter = "org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class"
+adapters = {
+    "org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class",
+    "org/pipelineframework/aws/durable/AwsDurableDueWorkHandler.class",
+}
 
-with (zipfile.ZipFile(root / "orchestrator-svc/target/function.zip") as ingress,
-      zipfile.ZipFile(root / "function-worker/target/function.zip") as worker):
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--ingress", type=Path, default=root / "orchestrator-svc/target/function.zip")
+parser.add_argument("--worker", type=Path, default=root / "function-worker/target/function.zip")
+args = parser.parse_args()
+
+with (zipfile.ZipFile(args.ingress) as ingress,
+      zipfile.ZipFile(args.worker) as worker):
     ingress_files = set(ingress.namelist())
     worker_files = set(worker.namelist())
-    if adapter in ingress_files or adapter not in worker_files:
-        raise SystemExit("TPF's SQS entry point must be present only in the native worker ZIP")
+    if adapters & ingress_files or not adapters <= worker_files:
+        raise SystemExit("TPF's SQS entry points must be present only in the native worker ZIP")
     if not any("quarkus-amazon-lambda-http-" in name for name in ingress_files):
         raise SystemExit("The ingress ZIP must include the Quarkus Lambda HTTP adapter")
     if any("quarkus-amazon-lambda-http-" in name for name in worker_files):

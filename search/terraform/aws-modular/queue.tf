@@ -61,6 +61,11 @@ resource "aws_iam_role_policy" "queue_access" {
       },
       {
         Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = aws_sqs_queue.recovery.arn
+      },
+      {
+        Effect   = "Allow"
         Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:ConditionCheckItem"]
         Resource = [for table in aws_dynamodb_table.queue : table.arn]
       }

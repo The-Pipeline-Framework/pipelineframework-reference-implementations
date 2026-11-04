@@ -33,8 +33,7 @@ class RegisterSearchRelease {
 
     private static void register(String[] args) throws Exception {
         var mapper = PipelineJson.mapper();
-        Path search = Path.of(args[0]);
-        var deployment = mapper.readTree(Path.of(args[1]).toFile());
+        var deployment = mapper.readTree(Path.of(args[0]).toFile());
         String version = deployment.required("version").asText();
         String table = deployment.required("table").asText();
         String tenant = "search-aws-e2e";
@@ -45,7 +44,10 @@ class RegisterSearchRelease {
         var artifacts = descriptor.putArray("artifacts");
         PipelineContractDescriptor compiledContract;
         String pipelineId;
-        try (var zip = new ZipFile(search.resolve(truth + "/target/function.zip").toFile());
+        var deployedArtifacts = deployment.required("artifacts");
+        var deployedTruth = deployedArtifacts.required(truth);
+        Path truthArchive = Path.of(deployedTruth.required("local_path").asText());
+        try (var zip = new ZipFile(truthArchive.toFile());
              var input = zip.getInputStream(zip.getEntry(contractPath))) {
             compiledContract = new PipelineContractDescriptorLoader().load(input);
             var contract = mapper.valueToTree(compiledContract);
@@ -60,9 +62,9 @@ class RegisterSearchRelease {
                 capabilities.add("local");
             }
             contract.path("capabilities").path("transitionWorkerProtocols").forEach(p -> capabilities.add(p.asText()));
-            for (var entry : deployment.required("artifacts").properties()) {
+            for (var entry : deployedArtifacts.properties()) {
                 String name = entry.getKey();
-                Path archive = search.resolve(name + "/target/function.zip");
+                Path archive = Path.of(entry.getValue().required("local_path").asText());
                 String digest = entry.getValue().required("digest").asText();
                 if (!digest.equals(checksum(archive))) {
                     throw new IllegalStateException("Deployed ZIP digest differs for " + name);
@@ -86,12 +88,12 @@ class RegisterSearchRelease {
         long now = System.currentTimeMillis();
         var deployedDescriptor = mapper.treeToValue(descriptor, PipelineReleaseDescriptor.class);
         new PipelineReleaseDescriptorValidator().validate(deployedDescriptor, compiledContract);
-        var deployedTruth = deployment.required("artifacts").required(truth);
         String digest = deployedTruth.required("digest").asText();
         var record = new PipelineReleaseRecord(tenant, pipelineId, compiledContract.contractVersion(), version,
             PipelineReleaseStatus.REGISTERED, deployedDescriptor, truth, digest, deployedTruth.required("uri").asText(),
-            Files.size(search.resolve(truth + "/target/function.zip")), digest, compiledContract, now, now, 0L);
-        var config = new SmallRyeConfigBuilder().addDefaultSources()
+            Files.size(truthArchive), digest, compiledContract, now, now, 0L);
+        // This deployment tool trusts the Terraform table, independent of application config sources.
+        var config = new SmallRyeConfigBuilder()
             .withDefaultValue("pipeline.orchestrator.dynamo.release-table", table)
             .withMapping(PipelineOrchestratorConfig.class).build().getConfigMapping(PipelineOrchestratorConfig.class);
         var registry = new DynamoPipelineReleaseRegistry(config);
