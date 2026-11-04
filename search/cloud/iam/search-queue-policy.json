@@ -29,7 +29,7 @@
     {
       "Effect": "Allow",
       "Action": ["cloudwatch:PutMetricAlarm", "cloudwatch:DescribeAlarms", "cloudwatch:DeleteAlarms", "cloudwatch:ListTagsForResource"],
-      "Resource": "arn:aws:cloudwatch:*:*:alarm:search-modular-*-dead-letter"
+      "Resource": "arn:aws:cloudwatch:*:*:alarm:search-modular-*-*dead-letter"
     }
   ]
 }

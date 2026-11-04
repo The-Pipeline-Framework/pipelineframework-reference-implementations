@@ -89,7 +89,7 @@ jobs:
       id-token: write
     outputs:
       url: ${{ steps.apply.outputs.url }}
-      cleanup: ${{ steps.init.outputs.cleanup }}
+      cleanup: ${{ steps.retain-state.outcome == 'success' }}
       name_prefix: ${{ steps.identity.outputs.name_prefix }}
     steps:
       - name: Record deployment identity before creating resources
@@ -139,7 +139,7 @@ jobs:
             {"Version":"2012-10-17","Statement":[
               {"Effect":"Allow","Action":"lambda:*","Resource":"arn:aws:lambda:*:*:function:${{ steps.identity.outputs.name_prefix }}-*"},
               {"Effect":"Allow","Action":"events:*","Resource":"arn:aws:events:*:*:rule/${{ steps.identity.outputs.name_prefix }}-recovery"},
-              {"Effect":"Allow","Action":"cloudwatch:*","Resource":"arn:aws:cloudwatch:*:*:alarm:${{ steps.identity.outputs.name_prefix }}-dead-letter"},
+              {"Effect":"Allow","Action":"cloudwatch:*","Resource":"arn:aws:cloudwatch:*:*:alarm:${{ steps.identity.outputs.name_prefix }}-*dead-letter"},
               {"Effect":"Allow","Action":["iam:CreateRole","iam:DeleteRole","iam:GetRole","iam:AttachRolePolicy","iam:DetachRolePolicy","iam:List*","iam:GetRolePolicy","iam:PassRole","iam:TagRole","iam:UntagRole"],"Resource":"arn:aws:iam::*:role/${{ steps.identity.outputs.name_prefix }}-*-exec"},
               {"Effect":"Allow","Action":["iam:PutRolePolicy","iam:DeleteRolePolicy"],"Resource":"arn:aws:iam::*:role/${{ steps.identity.outputs.name_prefix }}-queue-exec"},
               {"Effect":"Allow","Action":"sqs:*","Resource":"arn:aws:sqs:*:*:${{ steps.identity.outputs.name_prefix }}-*"},
@@ -160,7 +160,6 @@ jobs:
           terraform init -input=false
           terraform validate
           terraform test -no-color
-          echo "cleanup=true" >> "$GITHUB_OUTPUT"
       - name: Deploy exact build and record Function URL
         id: apply
         working-directory: references/search/terraform/aws-modular
@@ -176,6 +175,7 @@ jobs:
           fi
           echo "url=$(terraform output -raw orchestrator_function_url)" >> "$GITHUB_OUTPUT"
       - name: Retain state for independent cleanup, including partial apply failure
+        id: retain-state
         if: always() && steps.init.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -186,6 +186,19 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
+      - name: Destroy using local state if retention failed
+        if: always() && steps.init.outcome == 'success' && steps.retain-state.outcome != 'success'
+        working-directory: references/search/terraform/aws-modular
+        env:
+          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-2' }}
+          TF_VAR_name_prefix: ${{ steps.identity.outputs.name_prefix }}
+        run: |
+          [[ "$TF_VAR_name_prefix" =~ ^search-modular-[0-9]+-[0-9]+$ ]] || exit 1
+          if [[ -s terraform.tfstate ]]; then
+            terraform destroy -input=false -auto-approve
+          elif [[ -s terraform.tfstate.backup ]]; then
+            terraform destroy -input=false -auto-approve -state=terraform.tfstate.backup
+          fi
 
   test:
     needs: deploy
@@ -279,7 +292,7 @@ jobs:
             {"Version":"2012-10-17","Statement":[
               {"Effect":"Allow","Action":"lambda:*","Resource":"arn:aws:lambda:*:*:function:${{ needs.deploy.outputs.name_prefix }}-*"},
               {"Effect":"Allow","Action":"events:*","Resource":"arn:aws:events:*:*:rule/${{ needs.deploy.outputs.name_prefix }}-recovery"},
-              {"Effect":"Allow","Action":"cloudwatch:*","Resource":"arn:aws:cloudwatch:*:*:alarm:${{ needs.deploy.outputs.name_prefix }}-dead-letter"},
+              {"Effect":"Allow","Action":"cloudwatch:*","Resource":"arn:aws:cloudwatch:*:*:alarm:${{ needs.deploy.outputs.name_prefix }}-*dead-letter"},
               {"Effect":"Allow","Action":["iam:DeleteRole","iam:GetRole","iam:DetachRolePolicy","iam:List*","iam:GetRolePolicy"],"Resource":"arn:aws:iam::*:role/${{ needs.deploy.outputs.name_prefix }}-*-exec"},
               {"Effect":"Allow","Action":["iam:DeleteRolePolicy"],"Resource":"arn:aws:iam::*:role/${{ needs.deploy.outputs.name_prefix }}-queue-exec"},
               {"Effect":"Allow","Action":["sqs:GetQueue*","sqs:ListQueueTags","sqs:SetQueueAttributes","sqs:DeleteQueue"],"Resource":"arn:aws:sqs:*:*:${{ needs.deploy.outputs.name_prefix }}-*"},

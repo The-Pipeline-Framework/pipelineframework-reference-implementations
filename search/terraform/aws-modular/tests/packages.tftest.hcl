@@ -48,6 +48,21 @@ run "stage_all_packages_and_preserve_code_identity" {
   command = apply
 
   override_resource {
+    target = aws_sqs_queue.work
+    values = { arn = "arn:aws:sqs:us-east-2:123456789012:search-test-work" }
+  }
+
+  override_resource {
+    target = aws_sqs_queue.recovery
+    values = { arn = "arn:aws:sqs:us-east-2:123456789012:search-test-recovery" }
+  }
+
+  override_resource {
+    target = aws_sqs_queue.recovery_dead_letter
+    values = { arn = "arn:aws:sqs:us-east-2:123456789012:search-test-recovery-dead-letter" }
+  }
+
+  override_resource {
     target = aws_lambda_function_url.step["index-document-svc"]
     values = {
       function_url = "https://index-document.lambda-url.us-east-2.on.aws/"
@@ -84,6 +99,11 @@ run "stage_all_packages_and_preserve_code_identity" {
       aws_cloudwatch_event_rule.recovery.schedule_expression == "rate(1 minute)" &&
       aws_cloudwatch_event_target.recovery.arn == aws_sqs_queue.recovery.arn &&
       aws_lambda_event_source_mapping.recovery.event_source_arn == aws_sqs_queue.recovery.arn &&
+      aws_lambda_event_source_mapping.recovery.event_source_arn != aws_lambda_event_source_mapping.work.event_source_arn &&
+      jsondecode(aws_sqs_queue.recovery.redrive_policy).maxReceiveCount == 5 &&
+      jsondecode(aws_sqs_queue.recovery.redrive_policy).deadLetterTargetArn == aws_sqs_queue.recovery_dead_letter.arn &&
+      aws_sqs_queue.recovery_dead_letter.sqs_managed_sse_enabled &&
+      aws_cloudwatch_metric_alarm.recovery_dead_letter.dimensions["QueueName"] == aws_sqs_queue.recovery_dead_letter.name &&
       aws_lambda_event_source_mapping.recovery.function_name == aws_lambda_function.queue_recovery.arn &&
       aws_lambda_function.queue_recovery.s3_key == aws_lambda_function.queue_worker.s3_key &&
       one(aws_lambda_function.queue_recovery.environment).variables["QUARKUS_LAMBDA_HANDLER"] == "aws-durable-due-work" &&

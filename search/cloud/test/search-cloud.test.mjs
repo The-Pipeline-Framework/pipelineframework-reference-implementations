@@ -9,32 +9,37 @@ const runner = new URL('../run-search-cloud.mjs', import.meta.url).pathname;
 const sha = 'a'.repeat(40);
 const repository = 'The-Pipeline-Framework/pipelineframework-reference-implementations';
 const version = '26.10.1-main.aaaaaaaaaaaa';
+const reports = 'search/orchestrator-svc/target/failsafe-reports';
+const reportName = 'TEST-org.pipelineframework.search.orchestrator.service.AwsLambdaModularEndToEndIT.xml';
+const passingReport = '<testsuite tests="3" skipped="0" failures="0" errors="0"/>';
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'tpf-cloud-'));
   await mkdir(join(root, 'search'));
-  const reports = join(root, 'search/orchestrator-svc/target/failsafe-reports');
-  await mkdir(reports, {recursive: true});
-  await writeFile(join(reports, 'TEST-org.pipelineframework.search.orchestrator.service.AwsLambdaModularEndToEndIT.xml'),
-    '<testsuite tests="3" skipped="0" failures="0" errors="0"/>');
   await writeFile(join(root, 'pom.xml'), '<project><properties>' +
     ['bom', 'compiler', 'connectors', 'runtime'].map((key) =>
       `<pipelineframework.${key}.version>26.10.1-SNAPSHOT</pipelineframework.${key}.version>`).join('') +
     '</properties></project>');
   const capture = join(root, 'capture');
   const script = '#!/bin/sh\nprintf "%s\\n" "$MAVEN_ARGS" "$@" > "$TPF_CAPTURE"\n';
-  await writeFile(join(root, 'mvnw'), script, {mode: 0o755});
+  await writeFile(join(root, 'mvnw'), script + `
+test ! -e '${reports}' || exit 2
+if [ -n "$TPF_REPORT" ]; then
+  mkdir -p '${reports}'
+  printf '%s\n' "$TPF_REPORT" > '${reports}/${reportName}'
+fi
+`, {mode: 0o755});
   await writeFile(join(root, 'search/build-lambda-modular.sh'), script, {mode: 0o755});
   const set = {testHarnesses: {references: {repository, sha}},
     coordinationBom: {mavenVersion: version}, components: Object.fromEntries(
       ['compiler', 'connectors', 'runtime'].map((component) => [component, {mavenVersion: version}]))};
-  return {root, capture, set};
+  return {root, capture, set, report: passingReport};
 }
 async function run(f, mode = 'build', url = '') {
   await writeFile(join(f.root, 'set.json'), JSON.stringify(f.set));
   return spawnSync(process.execPath, [runner, '--mode', mode, '--source', f.root,
     '--sourceSha', sha, '--resolvedSet', join(f.root, 'set.json'),
     '--mavenRepository', join(f.root, 'm2')], {encoding: 'utf8', env: {
-      ...process.env, TPF_CAPTURE: f.capture, AWS_LAMBDA_ORCHESTRATOR_URL: url
+      ...process.env, TPF_CAPTURE: f.capture, TPF_REPORT: f.report, AWS_LAMBDA_ORCHESTRATOR_URL: url
     }});
 }
 test('AWS cloud build pins all reference dependencies to the same resolved train', async () => {
@@ -62,12 +67,20 @@ test('AWS cloud test invokes owner integration test, not a module-only smoke', a
 });
 test('a skipped AWS test suite cannot produce green cloud evidence', async () => {
   const f = await fixture();
-  await writeFile(join(f.root, 'search/orchestrator-svc/target/failsafe-reports',
-    'TEST-org.pipelineframework.search.orchestrator.service.AwsLambdaModularEndToEndIT.xml'),
-  '<testsuite tests="3" skipped="3" failures="0" errors="0"/>');
+  f.report = '<testsuite tests="3" skipped="3" failures="0" errors="0"/>';
   const result = await run(f, 'test', 'https://abc.lambda-url.us-east-2.on.aws/');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /unskipped tests/);
+});
+test('a stale passing Failsafe report cannot satisfy the cloud gate', async () => {
+  const f = await fixture();
+  const directory = join(f.root, reports);
+  await mkdir(directory, {recursive: true});
+  await writeFile(join(directory, reportName), passingReport);
+  f.report = '';
+  const result = await run(f, 'test', 'https://abc.lambda-url.us-east-2.on.aws/');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /ENOENT/);
 });
 for (const defect of ['sha', 'repository', 'snapshot', 'missing-pin', 'missing-url', 'foreign-url']) {
   test(`cloud preparation fails closed on ${defect}`, async () => {
@@ -97,6 +110,9 @@ test('cleanup-only reruns retain the original deployment prefix in Terraform and
   const workflow = await readFile(new URL('../../../.github/workflows/system-test-search-aws.yml', import.meta.url), 'utf8');
   const deploy = workflow.split('\n  deploy:\n')[1].split('\n  test:\n')[0];
   assert.match(deploy, /name_prefix: \$\{\{ steps.identity.outputs.name_prefix \}\}/);
+  assert.match(deploy, /cleanup: \$\{\{ steps.retain-state.outcome == 'success' \}\}/);
+  assert.match(deploy, /steps.retain-state.outcome != 'success'/);
+  assert.match(deploy, /terraform destroy -input=false -auto-approve/);
   assert.ok(deploy.indexOf('id: identity') < deploy.indexOf('terraform apply'));
   const cleanup = workflow.split('\n  cleanup:\n')[1];
   assert.doesNotMatch(cleanup, /github.run_attempt/);
@@ -106,7 +122,7 @@ test('cleanup-only reruns retain the original deployment prefix in Terraform and
   assert.deepEqual([...new Set(policy.Statement.flatMap((statement) => statement.Resource))], [
     'arn:aws:lambda:*:*:function:search-modular-123-1-*',
     'arn:aws:events:*:*:rule/search-modular-123-1-recovery',
-    'arn:aws:cloudwatch:*:*:alarm:search-modular-123-1-dead-letter',
+    'arn:aws:cloudwatch:*:*:alarm:search-modular-123-1-*dead-letter',
     'arn:aws:iam::*:role/search-modular-123-1-*-exec',
     'arn:aws:iam::*:role/search-modular-123-1-queue-exec',
     'arn:aws:sqs:*:*:search-modular-123-1-*',

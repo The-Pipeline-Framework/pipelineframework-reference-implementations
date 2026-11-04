@@ -49,10 +49,33 @@ resource "aws_cloudwatch_metric_alarm" "dead_letter" {
   treat_missing_data  = "notBreaching"
 }
 
+resource "aws_sqs_queue" "recovery_dead_letter" {
+  name                    = "${var.name_prefix}-recovery-dead-letter"
+  sqs_managed_sse_enabled = true
+}
+
+resource "aws_cloudwatch_metric_alarm" "recovery_dead_letter" {
+  alarm_name          = "${var.name_prefix}-recovery-dead-letter"
+  alarm_description   = "Search recovery ticks are waiting in the dead-letter queue."
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  dimensions          = { QueueName = aws_sqs_queue.recovery_dead_letter.name }
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+}
+
 resource "aws_sqs_queue" "recovery" {
   name                       = "${var.name_prefix}-recovery"
   visibility_timeout_seconds = 360
   sqs_managed_sse_enabled    = true
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.recovery_dead_letter.arn
+    maxReceiveCount     = 5
+  })
 }
 
 resource "aws_cloudwatch_event_rule" "recovery" {
