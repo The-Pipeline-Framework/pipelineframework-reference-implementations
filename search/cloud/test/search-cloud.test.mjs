@@ -133,7 +133,7 @@ test('cleanup-only reruns retain the original deployment prefix in Terraform and
     'arn:aws:s3:::search-modular-123-1-code-*/*'
   ]);
   const mapping = policy.Statement.find((statement) => statement.Resource === '*');
-  assert.deepEqual(mapping.Action, ['lambda:GetEventSourceMapping', 'lambda:DeleteEventSourceMapping']);
+  assert.equal(mapping.Action, 'lambda:DeleteEventSourceMapping');
   assert.equal(mapping.Condition.ArnLike['lambda:FunctionArn'],
     'arn:aws:lambda:*:*:function:search-modular-123-1-queue-*');
 });
@@ -152,6 +152,13 @@ test('S3 package authority is bounded to the run and cleanup cannot upload new c
     const rendered = body.replaceAll(expression, 'search-modular-12345678901-100');
     const policyText = rendered.match(/inline-session-policy: >-\n\s*(\{[\s\S]*?\n\s*\]\})/)[1];
     const policy = JSON.parse(policyText);
+    const mappingActions = policy.Statement.filter(statement => statement.Resource === '*');
+    const read = mappingActions.find(statement => statement.Action === 'lambda:GetEventSourceMapping');
+    assert.ok(read && !read.Condition, 'Terraform must read a mapping after Lambda removes its FunctionArn');
+    const mutations = mappingActions.filter(statement => statement !== read);
+    assert.equal(mutations.length, 1);
+    assert.equal(mutations[0].Condition.ArnLike['lambda:FunctionArn'],
+      'arn:aws:lambda:*:*:function:search-modular-12345678901-100-queue-*');
     assert.ok(policyText.replaceAll(/\n\s*/g, ' ').length <= 2048, 'STS inline policy must fit its plaintext limit');
     const bucket = policy.Statement.find(statement => statement.Resource === 'arn:aws:s3:::search-modular-12345678901-100-code-*');
     const objects = policy.Statement.find(statement => statement.Resource === 'arn:aws:s3:::search-modular-12345678901-100-code-*/*');
