@@ -24,32 +24,27 @@
             <artifactId>quarkus-amazon-lambda</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-lambda-java-events</artifactId>
-            <version>3.16.1</version>
+            <groupId>org.pipelineframework</groupId>
+            <artifactId>pipelineframework-aws-durable-coordination-host</artifactId>
+            <version>${pipelineframework.runtime.version}</version>
         </dependency>
     </dependencies>
     <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.9.0</version>
+                <artifactId>maven-antrun-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>published-sqs-entry-point</id>
-                        <phase>process-classes</phase>
-                        <goals><goal>unpack</goal></goals>
+                        <id>remove-legacy-unpacked-handlers</id>
+                        <phase>initialize</phase>
+                        <goals><goal>run</goal></goals>
                         <configuration>
-                            <artifactItems>
-                                <artifactItem>
-                                    <groupId>org.pipelineframework</groupId>
-                                    <artifactId>pipelineframework-aws-durable-coordination-host</artifactId>
-                                    <version>${pipelineframework.runtime.version}</version>
-                                    <outputDirectory>${project.build.outputDirectory}</outputDirectory>
-                                    <includes>org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class,org/pipelineframework/aws/durable/AwsDurableDueWorkHandler.class,org/pipelineframework/aws/durable/AwsDurableSqsBatchAdapter.class</includes>
-                                </artifactItem>
-                            </artifactItems>
+                            <target>
+                                <delete file="${project.build.outputDirectory}/org/pipelineframework/aws/durable/AwsDurableWorkItemHandler.class"/>
+                                <delete file="${project.build.outputDirectory}/org/pipelineframework/aws/durable/AwsDurableDueWorkHandler.class"/>
+                                <delete file="${project.build.outputDirectory}/org/pipelineframework/aws/durable/AwsDurableSqsBatchAdapter.class"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>
